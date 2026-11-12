@@ -421,11 +421,6 @@ create table if not exists public.garantias (
   id                   bigint generated always as identity primary key,
   empresa_id           smallint not null references public.empresas (id),
   cliente_id           bigint not null references public.clientes (id),
-  produto_id           bigint not null,
-  marca_id             bigint not null,
-  origem               text not null check (origem in ('NACIONAL', 'IMPORTADO')),
-  quantidade           numeric(12, 3) not null check (quantidade > 0 and quantidade <= 1000000),
-  valor_unitario       numeric(14, 2) check (valor_unitario is null or (valor_unitario >= 0 and valor_unitario <= 100000000)),
   status               text not null default 'ABERTA' check (status in (
                          'ABERTA', 'EM_ANALISE', 'ENVIADA_FORNECEDOR', 'APROVADA',
                          'REPROVADA', 'CONCLUIDA', 'CANCELADA')),
@@ -443,18 +438,12 @@ create table if not exists public.garantias (
   criado_por           uuid references public.perfis (id) on delete set null,
   atualizado_por       uuid references public.perfis (id) on delete set null,
   criado_em            timestamptz not null default now(),
-  atualizado_em        timestamptz not null default now(),
-  constraint garantias_produto_marca_fk
-    foreign key (produto_id, marca_id)
-    references public.produto_marcas (produto_id, marca_id)
-    on delete restrict
+  atualizado_em        timestamptz not null default now()
 );
 
 create index if not exists garantias_status on public.garantias (status);
 create index if not exists garantias_empresa on public.garantias (empresa_id);
 create index if not exists garantias_cliente on public.garantias (cliente_id);
-create index if not exists garantias_produto_marca on public.garantias (produto_id, marca_id);
-create index if not exists garantias_marca on public.garantias (marca_id);
 create index if not exists garantias_data_abertura on public.garantias (data_abertura desc, id desc);
 create index if not exists garantias_criado_por on public.garantias (criado_por);
 create index if not exists garantias_atualizado_por on public.garantias (atualizado_por);
@@ -510,6 +499,48 @@ drop trigger if exists garantias_preparar on public.garantias;
 create trigger garantias_preparar
   before insert or update on public.garantias
   for each row execute function privado.garantias_preparar();
+
+-- =============================================================================
+--  ITENS DA GARANTIA (uma garantia pode ter 1 ou mais produtos)
+-- =============================================================================
+create table if not exists public.garantia_itens (
+  id             bigint generated always as identity primary key,
+  garantia_id    bigint not null references public.garantias (id) on delete cascade,
+  ordem          smallint not null default 1,
+  produto_id     bigint not null,
+  marca_id       bigint not null,
+  origem         text not null check (origem in ('NACIONAL', 'IMPORTADO')),
+  quantidade     numeric(12, 3) not null check (quantidade > 0 and quantidade <= 1000000),
+  valor_unitario numeric(14, 2) check (valor_unitario is null or (valor_unitario >= 0 and valor_unitario <= 100000000)),
+  constraint garantia_itens_produto_marca_fk
+    foreign key (produto_id, marca_id)
+    references public.produto_marcas (produto_id, marca_id)
+    on delete restrict
+);
+
+create index if not exists garantia_itens_garantia on public.garantia_itens (garantia_id, ordem);
+create index if not exists garantia_itens_produto_marca on public.garantia_itens (produto_id, marca_id);
+create index if not exists garantia_itens_marca on public.garantia_itens (marca_id);
+
+-- Atualização de bancos criados antes dos "vários produtos": cada garantia antiga
+-- (com uma peça só) vira uma garantia com 1 item, sem perder nenhum dado.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'garantias' and column_name = 'produto_id'
+  ) then
+    execute 'insert into public.garantia_itens (garantia_id, ordem, produto_id, marca_id, origem, quantidade, valor_unitario)
+             select g.id, 1, g.produto_id, g.marca_id, g.origem, g.quantidade, g.valor_unitario
+               from public.garantias g
+              where not exists (select 1 from public.garantia_itens i where i.garantia_id = g.id)';
+    execute 'drop view if exists public.vw_garantias';
+    execute 'alter table public.garantias
+               drop column produto_id, drop column marca_id, drop column origem,
+               drop column quantidade, drop column valor_unitario';
+  end if;
+end;
+$$;
 
 -- =============================================================================
 --  HISTÓRICO / ANDAMENTO DE CADA GARANTIA (imutável)
@@ -624,11 +655,7 @@ begin
 
   if new.empresa_id is distinct from old.empresa_id then v_campos := v_campos || 'empresa'::text; end if;
   if new.cliente_id is distinct from old.cliente_id then v_campos := v_campos || 'cliente'::text; end if;
-  if new.produto_id is distinct from old.produto_id then v_campos := v_campos || 'peça'::text; end if;
-  if new.marca_id is distinct from old.marca_id then v_campos := v_campos || 'marca'::text; end if;
-  if new.origem is distinct from old.origem then v_campos := v_campos || 'origem'::text; end if;
-  if new.quantidade is distinct from old.quantidade then v_campos := v_campos || 'quantidade'::text; end if;
-  if new.valor_unitario is distinct from old.valor_unitario then v_campos := v_campos || 'valor unitário'::text; end if;
+  if coalesce(current_setting('app.itens_alterados', true), '') = '1' then v_campos := v_campos || 'produtos'::text; end if;
   if new.resolucao is distinct from old.resolucao and not v_status_mudou then v_campos := v_campos || 'resolução'::text; end if;
   if new.data_abertura is distinct from old.data_abertura then v_campos := v_campos || 'data de abertura'::text; end if;
   if new.nota_fiscal_venda is distinct from old.nota_fiscal_venda then v_campos := v_campos || 'NF de venda'::text; end if;
@@ -791,6 +818,9 @@ create trigger auditoria after insert or update or delete on public.clientes
 drop trigger if exists auditoria on public.garantias;
 create trigger auditoria after insert or update or delete on public.garantias
   for each row execute function privado.registrar_auditoria();
+drop trigger if exists auditoria on public.garantia_itens;
+create trigger auditoria after insert or update or delete on public.garantia_itens
+  for each row execute function privado.registrar_auditoria();
 drop trigger if exists auditoria on public.anexos;
 create trigger auditoria after insert or update or delete on public.anexos
   for each row execute function privado.registrar_auditoria();
@@ -798,7 +828,8 @@ create trigger auditoria after insert or update or delete on public.anexos
 -- =============================================================================
 --  VISÃO CONSOLIDADA DAS GARANTIAS (respeita as mesmas regras de acesso)
 -- =============================================================================
-create or replace view public.vw_garantias
+drop view if exists public.vw_garantias;
+create view public.vw_garantias
 with (security_invoker = true)
 as
 select
@@ -809,16 +840,17 @@ select
   g.cliente_id,
   c.codigo as cliente_codigo,
   c.nome   as cliente_nome,
-  g.produto_id,
-  p.codigo    as produto_codigo,
-  p.descricao as produto_descricao,
-  g.marca_id,
-  m.nome as marca_nome,
-  pm.referencia,
-  g.origem,
-  g.quantidade,
-  g.valor_unitario,
-  round(g.quantidade * g.valor_unitario, 2) as valor_total,
+  coalesce(it.qtd_itens, 0)  as qtd_itens,
+  it.itens_resumo,
+  it.quantidade_total        as quantidade,
+  it.valor_total,
+  case
+    when coalesce(it.tem_nacional, false) and coalesce(it.tem_importado, false) then 'MISTA'
+    when coalesce(it.tem_importado, false) then 'IMPORTADO'
+    else 'NACIONAL'
+  end as origem,
+  coalesce(it.tem_nacional, false)  as tem_nacional,
+  coalesce(it.tem_importado, false) as tem_importado,
   g.status,
   g.resolucao,
   g.data_abertura,
@@ -838,15 +870,30 @@ select
   g.atualizado_em,
   privado.normalizar(concat_ws(' ',
     lpad(g.id::text, 5, '0'), g.id::text,
-    c.codigo, c.nome, p.codigo, p.descricao, m.nome, pm.referencia,
+    c.codigo, c.nome, it.busca_itens,
     g.fornecedor, g.nota_fiscal_venda, g.nota_fiscal_compra, g.protocolo_fornecedor
   )) as busca
 from public.garantias g
 join public.empresas e on e.id = g.empresa_id
 join public.clientes c on c.id = g.cliente_id
-join public.produtos p on p.id = g.produto_id
-join public.marcas m on m.id = g.marca_id
-left join public.produto_marcas pm on pm.produto_id = g.produto_id and pm.marca_id = g.marca_id
+left join lateral (
+  select
+    count(*)::int                                         as qtd_itens,
+    sum(i.quantidade)                                     as quantidade_total,
+    sum(round(i.quantidade * i.valor_unitario, 2))        as valor_total,
+    bool_or(i.origem = 'NACIONAL')                        as tem_nacional,
+    bool_or(i.origem = 'IMPORTADO')                       as tem_importado,
+    string_agg(
+      concat(trim_scale(i.quantidade), '× ', p.descricao, ' (', m.nome, ')'),
+      '; ' order by i.ordem, i.id
+    )                                                     as itens_resumo,
+    string_agg(concat_ws(' ', p.codigo, p.descricao, m.nome, pm.referencia), ' ') as busca_itens
+  from public.garantia_itens i
+  join public.produtos p on p.id = i.produto_id
+  join public.marcas m on m.id = i.marca_id
+  left join public.produto_marcas pm on pm.produto_id = i.produto_id and pm.marca_id = i.marca_id
+  where i.garantia_id = g.id
+) it on true
 left join public.perfis cp on cp.id = g.criado_por
 left join public.perfis ap on ap.id = g.atualizado_por;
 
@@ -862,6 +909,7 @@ alter table public.clientes         enable row level security;
 alter table public.garantias        enable row level security;
 alter table public.garantia_eventos enable row level security;
 alter table public.anexos           enable row level security;
+alter table public.garantia_itens   enable row level security;
 alter table public.auditoria        enable row level security;
 
 -- Perfis: cada um vê o próprio; usuários com acesso veem todos; só admin altera.
@@ -949,6 +997,19 @@ create policy garantias_alterar on public.garantias for update to authenticated
   using ((select privado.pode_editar())) with check ((select privado.pode_editar()));
 
 -- Histórico: leitura para quem tem acesso; pelo app só é possível incluir COMENTÁRIOS.
+drop policy if exists itens_ler on public.garantia_itens;
+create policy itens_ler on public.garantia_itens for select to authenticated
+  using ((select privado.tem_acesso()));
+drop policy if exists itens_inserir on public.garantia_itens;
+create policy itens_inserir on public.garantia_itens for insert to authenticated
+  with check ((select privado.pode_editar()));
+drop policy if exists itens_alterar on public.garantia_itens;
+create policy itens_alterar on public.garantia_itens for update to authenticated
+  using ((select privado.pode_editar())) with check ((select privado.pode_editar()));
+drop policy if exists itens_excluir on public.garantia_itens;
+create policy itens_excluir on public.garantia_itens for delete to authenticated
+  using ((select privado.pode_editar()));
+
 drop policy if exists eventos_ler on public.garantia_eventos;
 create policy eventos_ler on public.garantia_eventos for select to authenticated
   using ((select privado.tem_acesso()));
@@ -1003,17 +1064,21 @@ grant insert (codigo, nome, documento, cidade, uf, telefone, ativo),
       update (codigo, nome, documento, cidade, uf, telefone, ativo) on public.clientes to authenticated;
 
 grant select on public.garantias to authenticated;
-grant insert (empresa_id, cliente_id, produto_id, marca_id, origem, quantidade, valor_unitario,
+grant insert (empresa_id, cliente_id,
               status, resolucao, data_abertura, data_conclusao, nota_fiscal_venda, data_venda,
               fornecedor, nota_fiscal_compra, protocolo_fornecedor, defeito, observacoes)
   on public.garantias to authenticated;
-grant update (empresa_id, cliente_id, produto_id, marca_id, origem, quantidade, valor_unitario,
+grant update (empresa_id, cliente_id,
               status, resolucao, data_abertura, nota_fiscal_venda, data_venda,
               fornecedor, nota_fiscal_compra, protocolo_fornecedor, defeito, observacoes)
   on public.garantias to authenticated;
 
 grant select on public.garantia_eventos to authenticated;
 grant insert (garantia_id, tipo, descricao) on public.garantia_eventos to authenticated;
+
+grant select, delete on public.garantia_itens to authenticated;
+grant insert (garantia_id, ordem, produto_id, marca_id, origem, quantidade, valor_unitario),
+      update (ordem, produto_id, marca_id, origem, quantidade, valor_unitario) on public.garantia_itens to authenticated;
 
 grant select, delete on public.anexos to authenticated;
 grant insert (garantia_id, caminho, nome_arquivo, tipo_mime, tamanho_bytes) on public.anexos to authenticated;
@@ -1112,13 +1177,13 @@ as $$
     select
       gg.*,
       gg.status in ('CONCLUIDA', 'REPROVADA', 'CANCELADA') as finalizada
-    from public.garantias gg
+    from public.vw_garantias gg
   )
   select jsonb_build_object(
     'total', (select count(*) from g),
     'em_andamento', (select count(*) from g where not finalizada),
     'atrasadas_30_dias', (select count(*) from g where not finalizada and data_abertura < privado.hoje() - 30),
-    'valor_em_andamento', (select coalesce(sum(quantidade * valor_unitario), 0) from g where not finalizada),
+    'valor_em_andamento', (select coalesce(sum(valor_total), 0) from g where not finalizada),
     'por_status', coalesce((
       select jsonb_object_agg(status, n)
       from (select status, count(*) as n from g group by status) s
@@ -1132,10 +1197,10 @@ as $$
       from public.empresas e
     ), '[]'::jsonb),
     'por_origem', jsonb_build_object(
-      'NACIONAL', (select count(*) from g where origem = 'NACIONAL'),
-      'IMPORTADO', (select count(*) from g where origem = 'IMPORTADO'),
-      'NACIONAL_em_andamento', (select count(*) from g where origem = 'NACIONAL' and not finalizada),
-      'IMPORTADO_em_andamento', (select count(*) from g where origem = 'IMPORTADO' and not finalizada)
+      'NACIONAL', (select count(*) from g where tem_nacional),
+      'IMPORTADO', (select count(*) from g where tem_importado),
+      'NACIONAL_em_andamento', (select count(*) from g where tem_nacional and not finalizada),
+      'IMPORTADO_em_andamento', (select count(*) from g where tem_importado and not finalizada)
     )
   )
 $$;
@@ -1517,7 +1582,7 @@ begin
    where pm.produto_id = v_id
      and not (pm.marca_id = any (v_ids))
      and not exists (
-       select 1 from public.garantias g
+       select 1 from public.garantia_itens g
        where g.produto_id = pm.produto_id and g.marca_id = pm.marca_id
      );
 
@@ -1592,6 +1657,122 @@ begin
 end;
 $$;
 
+-- Salva a garantia e TODOS os seus produtos de uma vez (tudo ou nada).
+-- p_dados: {"empresa_id", "cliente_id", "status", "resolucao", "data_abertura", "nota_fiscal_venda",
+--           "data_venda", "fornecedor", "nota_fiscal_compra", "protocolo_fornecedor", "defeito", "observacoes"}
+-- p_itens: [{"produto_id", "marca_id", "origem", "quantidade", "valor_unitario"}]  (pelo menos 1)
+-- p_atualizado_em: ao editar, a data de atualização que a tela carregou (evita sobrescrever o trabalho de outra pessoa).
+create or replace function public.salvar_garantia(
+  p_dados jsonb,
+  p_itens jsonb,
+  p_id bigint default null,
+  p_atualizado_em timestamptz default null
+)
+returns bigint
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_id bigint := p_id;
+  v_novo jsonb;
+  v_anterior jsonb;
+begin
+  if not privado.pode_editar() then
+    raise exception 'Você não tem permissão para alterar garantias.' using errcode = '42501';
+  end if;
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object' then
+    raise exception 'Dados da garantia inválidos.' using errcode = '22023';
+  end if;
+  if p_itens is null or jsonb_typeof(p_itens) <> 'array' or jsonb_array_length(p_itens) = 0 then
+    raise exception 'Adicione pelo menos um produto à garantia.' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_itens) > 50 then
+    raise exception 'Informe no máximo 50 produtos por garantia.' using errcode = '22023';
+  end if;
+
+  v_novo := (
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'produto_id', (e ->> 'produto_id')::bigint,
+      'marca_id', (e ->> 'marca_id')::bigint,
+      'origem', upper(e ->> 'origem'),
+      'quantidade', (e ->> 'quantidade')::numeric,
+      'valor_unitario', nullif(e ->> 'valor_unitario', '')::numeric
+    ) order by ord), '[]'::jsonb)
+    from jsonb_array_elements(p_itens) with ordinality as t(e, ord)
+  );
+
+  if v_id is null then
+    insert into public.garantias (
+      empresa_id, cliente_id, status, resolucao, data_abertura, nota_fiscal_venda, data_venda,
+      fornecedor, nota_fiscal_compra, protocolo_fornecedor, defeito, observacoes
+    ) values (
+      (p_dados ->> 'empresa_id')::smallint,
+      (p_dados ->> 'cliente_id')::bigint,
+      coalesce(nullif(p_dados ->> 'status', ''), 'ABERTA'),
+      nullif(p_dados ->> 'resolucao', ''),
+      coalesce(nullif(p_dados ->> 'data_abertura', '')::date, privado.hoje()),
+      p_dados ->> 'nota_fiscal_venda',
+      nullif(p_dados ->> 'data_venda', '')::date,
+      p_dados ->> 'fornecedor',
+      p_dados ->> 'nota_fiscal_compra',
+      p_dados ->> 'protocolo_fornecedor',
+      coalesce(p_dados ->> 'defeito', ''),
+      p_dados ->> 'observacoes'
+    )
+    returning id into v_id;
+  else
+    perform 1 from public.garantias g
+     where g.id = v_id and (p_atualizado_em is null or g.atualizado_em = p_atualizado_em)
+       for update;
+    if not found then
+      raise exception 'Garantia alterada por outra pessoa enquanto você editava. Atualize a página e tente novamente; nada foi salvo.'
+        using errcode = 'P0001';
+    end if;
+
+    update public.garantias set
+      empresa_id = (p_dados ->> 'empresa_id')::smallint,
+      cliente_id = (p_dados ->> 'cliente_id')::bigint,
+      resolucao = nullif(p_dados ->> 'resolucao', ''),
+      data_abertura = coalesce(nullif(p_dados ->> 'data_abertura', '')::date, data_abertura),
+      nota_fiscal_venda = p_dados ->> 'nota_fiscal_venda',
+      data_venda = nullif(p_dados ->> 'data_venda', '')::date,
+      fornecedor = p_dados ->> 'fornecedor',
+      nota_fiscal_compra = p_dados ->> 'nota_fiscal_compra',
+      protocolo_fornecedor = p_dados ->> 'protocolo_fornecedor',
+      defeito = coalesce(p_dados ->> 'defeito', ''),
+      observacoes = p_dados ->> 'observacoes'
+    where id = v_id;
+  end if;
+
+  v_anterior := (
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'produto_id', i.produto_id, 'marca_id', i.marca_id, 'origem', i.origem,
+      'quantidade', i.quantidade, 'valor_unitario', i.valor_unitario
+    ) order by i.ordem, i.id), '[]'::jsonb)
+    from public.garantia_itens i where i.garantia_id = v_id
+  );
+
+  if v_novo is distinct from v_anterior then
+    delete from public.garantia_itens where garantia_id = v_id;
+    insert into public.garantia_itens (garantia_id, ordem, produto_id, marca_id, origem, quantidade, valor_unitario)
+    select v_id, ord::smallint,
+           (e ->> 'produto_id')::bigint, (e ->> 'marca_id')::bigint, upper(e ->> 'origem'),
+           (e ->> 'quantidade')::numeric, nullif(e ->> 'valor_unitario', '')::numeric
+      from jsonb_array_elements(p_itens) with ordinality as t(e, ord);
+
+    if p_id is not null then
+      -- Registra no histórico que os produtos foram alterados.
+      perform set_config('app.itens_alterados', '1', true);
+      update public.garantias set empresa_id = empresa_id where id = v_id;
+      perform set_config('app.itens_alterados', '', true);
+    end if;
+  end if;
+
+  return v_id;
+end;
+$$;
+
 -- Permissões das funções públicas: somente usuários logados (exceto ping).
 revoke all on function public.ping() from public;
 revoke all on function public.alterar_status(bigint, text, text, text) from public, anon;
@@ -1605,6 +1786,7 @@ revoke all on function public.obter_ou_criar_marca(text) from public, anon;
 revoke all on function public.salvar_produto(text, text, boolean, jsonb, bigint) from public, anon;
 revoke all on function public.admin_definir_senha(uuid, text) from public, anon;
 revoke all on function public.admin_remover_2fa(uuid) from public, anon;
+revoke all on function public.salvar_garantia(jsonb, jsonb, bigint, timestamptz) from public, anon;
 
 grant execute on function public.ping() to anon, authenticated;
 grant execute on function public.alterar_status(bigint, text, text, text) to authenticated;
@@ -1618,6 +1800,7 @@ grant execute on function public.obter_ou_criar_marca(text) to authenticated;
 grant execute on function public.salvar_produto(text, text, boolean, jsonb, bigint) to authenticated;
 grant execute on function public.admin_definir_senha(uuid, text) to authenticated;
 grant execute on function public.admin_remover_2fa(uuid) to authenticated;
+grant execute on function public.salvar_garantia(jsonb, jsonb, bigint, timestamptz) to authenticated;
 
 -- =============================================================================
 --  ARMAZENAMENTO DE ARQUIVOS (bucket privado "anexos")
@@ -1666,7 +1849,7 @@ declare
   v_tabela text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach v_tabela in array array['garantias', 'garantia_eventos', 'anexos'] loop
+    foreach v_tabela in array array['garantias', 'garantia_itens', 'garantia_eventos', 'anexos'] loop
       if not exists (
         select 1 from pg_publication_tables
         where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = v_tabela

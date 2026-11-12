@@ -11,7 +11,7 @@ export function useAtrasado<T>(valor: T, ms = 300): T {
   return atrasado
 }
 
-type TabelaTempoReal = 'garantias' | 'garantia_eventos' | 'anexos'
+type TabelaTempoReal = 'garantias' | 'garantia_itens' | 'garantia_eventos' | 'anexos'
 
 /**
  * Chama `aoMudar` sempre que alguém (em qualquer aparelho) altera as tabelas

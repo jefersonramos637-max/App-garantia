@@ -12,38 +12,67 @@ function dataExcel(iso: string | null): Date | null {
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : null
 }
 
-const COLUNAS: { titulo: string; largura: number; valor: (g: Garantia) => string | number | Date | null; formato?: string }[] = [
-  { titulo: 'Nº', largura: 8, valor: (g) => numeroGarantia(g.id) },
-  { titulo: 'Abertura', largura: 12, valor: (g) => dataExcel(g.data_abertura), formato: 'dd/mm/yyyy' },
-  { titulo: 'Status', largura: 20, valor: (g) => rotuloStatus(g.status) },
-  { titulo: 'Empresa', largura: 20, valor: (g) => g.empresa_nome },
-  { titulo: 'Cód. cliente', largura: 12, valor: (g) => g.cliente_codigo },
-  { titulo: 'Cliente', largura: 34, valor: (g) => g.cliente_nome },
-  { titulo: 'Cód. peça', largura: 14, valor: (g) => g.produto_codigo },
-  { titulo: 'Peça', largura: 38, valor: (g) => g.produto_descricao },
-  { titulo: 'Marca', largura: 18, valor: (g) => g.marca_nome },
-  { titulo: 'Origem', largura: 11, valor: (g) => rotuloOrigem(g.origem) },
-  { titulo: 'Quantidade', largura: 11, valor: (g) => g.quantidade, formato: '#,##0.###' },
-  { titulo: 'Valor unitário', largura: 14, valor: (g) => g.valor_unitario, formato: '#,##0.00' },
-  { titulo: 'Valor total', largura: 14, valor: (g) => g.valor_total, formato: '#,##0.00' },
-  { titulo: 'NF venda', largura: 12, valor: (g) => g.nota_fiscal_venda },
-  { titulo: 'Data venda', largura: 12, valor: (g) => dataExcel(g.data_venda), formato: 'dd/mm/yyyy' },
-  { titulo: 'Fornecedor', largura: 24, valor: (g) => g.fornecedor },
-  { titulo: 'NF compra', largura: 12, valor: (g) => g.nota_fiscal_compra },
-  { titulo: 'Protocolo fornecedor', largura: 18, valor: (g) => g.protocolo_fornecedor },
-  { titulo: 'Defeito', largura: 50, valor: (g) => g.defeito },
-  { titulo: 'Resolução', largura: 16, valor: (g) => (g.resolucao ? rotuloResolucao(g.resolucao) : null) },
-  { titulo: 'Conclusão', largura: 12, valor: (g) => dataExcel(g.data_conclusao), formato: 'dd/mm/yyyy' },
-  { titulo: 'Observações', largura: 40, valor: (g) => g.observacoes },
-  { titulo: 'Registrada por', largura: 20, valor: (g) => g.criado_por_nome },
+export interface ItemExportacao {
+  garantia_id: number
+  ordem: number
+  origem: string
+  quantidade: number
+  valor_unitario: number | null
+  produto_marcas: {
+    referencia: string | null
+    produtos: { codigo: string | null; descricao: string } | null
+    marcas: { nome: string } | null
+  } | null
+}
+
+type Linha = { g: Garantia; item: ItemExportacao | null; numeroItem: number }
+
+const COLUNAS: { titulo: string; largura: number; valor: (l: Linha) => string | number | Date | null; formato?: string }[] = [
+  { titulo: 'Nº', largura: 8, valor: (l) => numeroGarantia(l.g.id) },
+  { titulo: 'Abertura', largura: 12, valor: (l) => dataExcel(l.g.data_abertura), formato: 'dd/mm/yyyy' },
+  { titulo: 'Status', largura: 20, valor: (l) => rotuloStatus(l.g.status) },
+  { titulo: 'Empresa', largura: 20, valor: (l) => l.g.empresa_nome },
+  { titulo: 'Cód. cliente', largura: 12, valor: (l) => l.g.cliente_codigo },
+  { titulo: 'Cliente', largura: 34, valor: (l) => l.g.cliente_nome },
+  { titulo: 'Item', largura: 6, valor: (l) => l.numeroItem },
+  { titulo: 'Cód. peça', largura: 14, valor: (l) => l.item?.produto_marcas?.produtos?.codigo ?? null },
+  { titulo: 'Peça', largura: 38, valor: (l) => l.item?.produto_marcas?.produtos?.descricao ?? null },
+  { titulo: 'Marca', largura: 18, valor: (l) => l.item?.produto_marcas?.marcas?.nome ?? null },
+  { titulo: 'Origem', largura: 11, valor: (l) => (l.item ? rotuloOrigem(l.item.origem) : null) },
+  { titulo: 'Quantidade', largura: 11, valor: (l) => l.item?.quantidade ?? null, formato: '#,##0.###' },
+  { titulo: 'Valor unitário', largura: 14, valor: (l) => l.item?.valor_unitario ?? null, formato: '#,##0.00' },
+  {
+    titulo: 'Subtotal do item',
+    largura: 15,
+    valor: (l) => (l.item && l.item.valor_unitario !== null ? Math.round(l.item.quantidade * l.item.valor_unitario * 100) / 100 : null),
+    formato: '#,##0.00',
+  },
+  { titulo: 'Total da garantia', largura: 16, valor: (l) => (l.numeroItem === 1 ? l.g.valor_total : null), formato: '#,##0.00' },
+  { titulo: 'NF venda', largura: 12, valor: (l) => l.g.nota_fiscal_venda },
+  { titulo: 'Data venda', largura: 12, valor: (l) => dataExcel(l.g.data_venda), formato: 'dd/mm/yyyy' },
+  { titulo: 'Fornecedor', largura: 24, valor: (l) => l.g.fornecedor },
+  { titulo: 'NF compra', largura: 12, valor: (l) => l.g.nota_fiscal_compra },
+  { titulo: 'Protocolo fornecedor', largura: 18, valor: (l) => l.g.protocolo_fornecedor },
+  { titulo: 'Defeito', largura: 50, valor: (l) => l.g.defeito },
+  { titulo: 'Resolução', largura: 16, valor: (l) => (l.g.resolucao ? rotuloResolucao(l.g.resolucao) : null) },
+  { titulo: 'Conclusão', largura: 12, valor: (l) => dataExcel(l.g.data_conclusao), formato: 'dd/mm/yyyy' },
+  { titulo: 'Observações', largura: 40, valor: (l) => l.g.observacoes },
+  { titulo: 'Registrada por', largura: 20, valor: (l) => l.g.criado_por_nome },
 ]
 
-export async function exportarGarantiasExcel(garantias: Garantia[]): Promise<void> {
+/** Uma linha por PRODUTO da garantia (garantias com 2 produtos ocupam 2 linhas). */
+export async function exportarGarantiasExcel(garantias: Garantia[], itens: ItemExportacao[]): Promise<void> {
+  const porGarantia = new Map<number, ItemExportacao[]>()
+  for (const i of itens) porGarantia.set(i.garantia_id, [...(porGarantia.get(i.garantia_id) ?? []), i])
+  const linhas: Linha[] = garantias.flatMap((g): Linha[] => {
+    const lista = (porGarantia.get(g.id) ?? []).sort((a, b) => a.ordem - b.ordem)
+    return lista.length ? lista.map((item, n): Linha => ({ g, item, numeroItem: n + 1 })) : [{ g, item: null, numeroItem: 1 }]
+  })
   const dados: SheetData = [
     COLUNAS.map((c) => ({ value: c.titulo, fontWeight: 'bold' as const })),
-    ...garantias.map((g) =>
+    ...linhas.map((l) =>
       COLUNAS.map((c) => {
-        const v = c.valor(g)
+        const v = c.valor(l)
         if (v === null || v === undefined || v === '') return null
         if (v instanceof Date) return { value: v, type: Date, format: c.formato ?? 'dd/mm/yyyy' }
         if (typeof v === 'number') return { value: v, type: Number, format: c.formato }
@@ -51,9 +80,7 @@ export async function exportarGarantiasExcel(garantias: Garantia[]): Promise<voi
       }),
     ),
   ]
-  await writeXlsxFile(dados, { columns: COLUNAS.map((c) => ({ width: c.largura })) }).toFile(
-    `garantias-${hojeISO()}.xlsx`,
-  )
+  await writeXlsxFile(dados, { columns: COLUNAS.map((c) => ({ width: c.largura })) }).toFile(`garantias-${hojeISO()}.xlsx`)
 }
 
 /** Planilhas-modelo para importação. */

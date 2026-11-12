@@ -32,7 +32,7 @@ registra aparece **na hora** para todas as outras.
 | Peça / produto | Busca pelo código ou descrição |
 | Marca | Só aparecem as marcas daquele produto (o produto “X” vem com as marcas “Y, Z, W”) |
 | **Nacional ou Importado** | Obrigatório. Preenchido automaticamente quando a marca tem origem cadastrada (pode alterar) |
-| Quantidade e valor | Valor unitário opcional; o total é calculado |
+| **Vários produtos** | Uma garantia pode ter 1 ou mais produtos (botão **+ Adicionar produto**); cada um com peça, marca, origem, quantidade e valor; o total da garantia é somado |
 | Defeito | Descrição da reclamação |
 | NF de venda, data da venda, fornecedor, NF de compra, protocolo do fornecedor, observações | Opcionais |
 
@@ -113,6 +113,8 @@ ser criado na **sua** conta do Supabase (gratuito). Tempo estimado: 15 minutos.
    https://raw.githubusercontent.com/jefersonramos637-max/App-garantia/claude/warranty-registry-app-51jbw6/supabase/migrations/20261111000000_esquema_inicial.sql
    Selecione tudo (**Ctrl+A**), copie (**Ctrl+C**), cole no editor do Supabase e clique em **Run**.
    Deve aparecer *“Success. No rows returned”*.
+   - **Quando uma versão nova mudar o banco**, o Claude avisa: basta repetir este passo com o script atualizado
+     (ele atualiza o que já existe e converte as garantias antigas, sem perder dados).
    - **Pode rodar de novo sem problema** se algo falhar: o script é seguro para reexecutar e não apaga dados.
    - ⚠️ No Chrome, **desative a tradução** deste site antes de copiar (ícone de tradução na barra de endereço →
      *Nunca traduzir supabase.com*). A tradução altera o texto do SQL e pode quebrar a execução.

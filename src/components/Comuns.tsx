@@ -41,7 +41,8 @@ export function SeloStatus({ status }: { status: string | null | undefined }) {
 
 export function SeloOrigem({ origem }: { origem: string | null | undefined }) {
   if (!origem) return <span className="selo">—</span>
-  return <span className={`selo ${origem === 'IMPORTADO' ? 'or-importado' : 'or-nacional'}`}>{rotuloOrigem(origem)}</span>
+  const classe = origem === 'IMPORTADO' ? 'or-importado' : origem === 'MISTA' ? 'or-mista' : 'or-nacional'
+  return <span className={`selo ${classe}`}>{rotuloOrigem(origem)}</span>
 }
 
 interface PaginacaoProps {

@@ -11,8 +11,9 @@ interface ErroGenerico {
 
 const MENSAGENS_RESTRICAO: Record<string, string> = {
   garantias_defeito_check: 'Descreva o defeito com pelo menos 3 caracteres.',
-  garantias_quantidade_check: 'A quantidade deve ser maior que zero.',
-  garantias_valor_unitario_check: 'Valor unitário inválido.',
+  garantia_itens_quantidade_check: 'A quantidade deve ser maior que zero.',
+  garantia_itens_valor_unitario_check: 'Valor unitário inválido.',
+  garantia_itens_origem_check: 'Informe se o produto é nacional ou importado.',
   garantia_eventos_comentario_preenchido: 'Escreva o comentário antes de enviar.',
   clientes_uf_check: 'UF inválida. Use a sigla com 2 letras (ex.: GO).',
   clientes_codigo_check: 'Informe o código do cliente (até 60 caracteres).',
@@ -80,6 +81,14 @@ export function mensagemErro(e: unknown): string {
   }
   if (/mime type .* is not supported|InvalidMimeType/i.test(msg + codigo)) {
     return 'Tipo de arquivo não permitido. Envie fotos (JPG, PNG, WEBP) ou PDF.'
+  }
+
+  // Banco ainda no formato antigo (script de atualização não foi rodado no Supabase)
+  if (
+    codigo === 'PGRST202' || codigo === 'PGRST204' || codigo === '42703' || codigo === '42883' || codigo === 'PGRST200' ||
+    /could not find the function|schema cache|garantia_itens|does not exist/i.test(msg)
+  ) {
+    return 'O banco de dados precisa ser atualizado para esta versão. Cole o script atualizado no SQL Editor do Supabase (guia, passo A2) e tente de novo.'
   }
 
   // Banco de dados (PostgreSQL / PostgREST)

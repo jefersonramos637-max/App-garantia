@@ -135,15 +135,16 @@ test.describe.serial('Aplicativo de garantias', () => {
     await page.getByRole('combobox', { name: 'Marca', exact: true }).selectOption({ label: 'JOHN DEERE (ref. RE504836)' })
     await page.getByRole('textbox', { name: 'Quantidade', exact: true }).fill('2')
     await page.getByLabel('Valor unitário (R$)').fill('1.234,50')
-    await expect(page.getByText(/Total: R\$\s2\.469,00/)).toBeVisible()
+    await expect(page.getByText(/Subtotal: R\$\s2\.469,00/)).toBeVisible()
+    await expect(page.getByText(/Total da garantia:\s*R\$\s2\.469,00/)).toBeVisible()
     await page.getByLabel('Descrição do defeito / reclamação').fill('Vazamento no elemento filtrante após 10 horas de uso')
     await page.getByLabel('NF de venda ao cliente').fill('NF 4521')
     await page.getByRole('button', { name: 'Registrar garantia' }).click()
 
     await expect(page.getByRole('heading', { level: 1, name: /Garantia Nº 00001/ })).toBeVisible()
     await expect(page.getByText('000123 — FAZENDA BOA VISTA LTDA')).toBeVisible()
-    await expect(page.locator('.grade-info')).toContainText('JOHN DEERE')
-    await expect(page.locator('.grade-info')).toContainText('Importado')
+    await expect(page.locator('.tabela-itens')).toContainText('JOHN DEERE')
+    await expect(page.locator('.tabela-itens')).toContainText('Importado')
     await expect(page.locator('.grade-info')).toContainText('LL Tratores')
     await expect(page.locator('.grade-info')).toContainText(/R\$\s2\.469,00/)
 
@@ -194,7 +195,8 @@ test.describe.serial('Aplicativo de garantias', () => {
     await page.getByLabel('Fornecedor', { exact: true }).fill('AGCO do Brasil')
     await page.getByRole('button', { name: 'Salvar alterações' }).click()
     await expect(page.getByRole('heading', { level: 1, name: /Garantia Nº 00001/ })).toBeVisible()
-    await expect(page.locator('.linha-tempo')).toContainText('Campos alterados: quantidade, fornecedor')
+    await expect(page.locator('.linha-tempo')).toContainText('Campos alterados: fornecedor')
+    await expect(page.locator('.linha-tempo')).toContainText('Campos alterados: produtos')
     await expect(page.locator('.grade-info')).toContainText('AGCO do Brasil')
 
     await page.goto('/')
@@ -219,7 +221,7 @@ test.describe.serial('Aplicativo de garantias', () => {
     await expect(a.page.getByRole('heading', { level: 1, name: /Garantia Nº 00001/ })).toBeVisible()
     await b.page.getByRole('textbox', { name: 'Quantidade', exact: true }).fill('9')
     await b.page.getByRole('button', { name: 'Salvar alterações' }).click()
-    await expect(b.page.getByRole('alert')).toContainText('foi alterada por outra pessoa')
+    await expect(b.page.getByRole('alert')).toContainText('alterada por outra pessoa')
     await a.contexto.close()
     await b.contexto.close()
   })
@@ -256,6 +258,69 @@ test.describe.serial('Aplicativo de garantias', () => {
     expect(linhas[1]).toContain('FAZENDA BOA VISTA LTDA')
     expect(linhas[1]).toContain('Importado')
     expect(linhas[1]).toContain('LL Tratores')
+  })
+
+  test('garantia com 2 produtos: adicionar, remover, registrar e conferir', async ({ page }) => {
+    const problemas = vigiarConsole(page)
+    await entrarNoPainel(page, USUARIOS.operador, SENHA_NOVA)
+    await page.goto('/garantias/nova')
+    await page.getByRole('radio', { name: /Lojão dos Tratores/ }).check()
+    await page.getByRole('combobox', { name: 'Cliente', exact: true }).fill('silva')
+    await page.getByRole('option', { name: /000124 — JOSÉ DA SILVA/ }).click()
+
+    const p1 = page.getByRole('group', { name: 'Produto 1' })
+    await p1.getByRole('combobox', { name: 'Peça / produto' }).fill('rolamento')
+    await page.getByRole('option', { name: /P0002 — ROLAMENTO 6205/ }).click()
+    await p1.getByRole('combobox', { name: 'Marca' }).selectOption({ label: 'SKF' })
+    await expect(p1.getByRole('radio', { name: 'Importado' })).toBeChecked()
+    await p1.getByRole('textbox', { name: 'Quantidade' }).fill('2')
+    await p1.getByRole('textbox', { name: 'Valor unitário (R$)' }).fill('50')
+
+    // Segundo produto
+    await page.getByRole('button', { name: '+ Adicionar produto' }).click()
+    const p2 = page.getByRole('group', { name: 'Produto 2' })
+    await p2.getByRole('combobox', { name: 'Peça / produto' }).fill('junta')
+    await page.getByRole('option', { name: /P0003 — JUNTA DO CABEÇOTE/ }).click()
+    await expect(p2.getByRole('combobox', { name: 'Marca' })).toHaveValue(/\d+/) // única marca: já selecionada
+    await p2.getByRole('radio', { name: 'Nacional' }).check()
+    await p2.getByRole('textbox', { name: 'Valor unitário (R$)' }).fill('100,00')
+
+    // Terceiro produto, removido em seguida
+    await page.getByRole('button', { name: '+ Adicionar produto' }).click()
+    await expect(page.getByRole('group', { name: 'Produto 3' })).toBeVisible()
+    await page.getByRole('group', { name: 'Produto 3' }).getByRole('button', { name: 'Remover' }).click()
+    await expect(page.getByRole('group', { name: 'Produto 3' })).toHaveCount(0)
+
+    await expect(page.getByText(/Total da garantia:\s*R\$\s200,00/)).toBeVisible()
+
+    // Produto incompleto é recusado e o erro aparece no produto certo
+    await page.getByRole('button', { name: '+ Adicionar produto' }).click()
+    await page.getByLabel('Descrição do defeito / reclamação').fill('Folga excessiva e vazamento')
+    await page.getByRole('button', { name: 'Registrar garantia' }).click()
+    await expect(page.getByRole('group', { name: 'Produto 3' }).getByText('Selecione a peça.')).toBeVisible()
+    await page.getByRole('group', { name: 'Produto 3' }).getByRole('button', { name: 'Remover' }).click()
+
+    await page.getByRole('button', { name: 'Registrar garantia' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: /Garantia Nº 00002/ })).toBeVisible()
+    const tabela = page.locator('.tabela-itens')
+    await expect(tabela).toContainText('ROLAMENTO 6205')
+    await expect(tabela).toContainText('JUNTA DO CABEÇOTE')
+    await expect(page.locator('.grade-info')).toContainText('Mista')
+    await expect(page.locator('.grade-info')).toContainText(/R\$\s200,00/)
+
+    // Edição: remove o segundo produto e o histórico registra
+    await page.getByRole('link', { name: 'Editar' }).click()
+    await expect(page.getByRole('group', { name: 'Produto 2' })).toBeVisible()
+    await page.getByRole('group', { name: 'Produto 2' }).getByRole('button', { name: 'Remover' }).click()
+    await page.getByRole('button', { name: 'Salvar alterações' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: /Garantia Nº 00002/ })).toBeVisible()
+    await expect(page.locator('.tabela-itens')).not.toContainText('JUNTA DO CABEÇOTE')
+    await expect(page.locator('.linha-tempo')).toContainText('Campos alterados: produtos')
+
+    // Lista: mostra o resumo dos produtos
+    await page.goto('/garantias')
+    await expect(page.getByRole('row', { name: /JOSÉ DA SILVA/ })).toContainText('2× ROLAMENTO 6205 (SKF)')
+    expect(problemas).toEqual([])
   })
 
   test('verificação em duas etapas: ativar, exigir código e admin remover', async ({ browser }) => {

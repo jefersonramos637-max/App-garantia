@@ -35,6 +35,7 @@ export const ORIGENS = [
 export type Origem = (typeof ORIGENS)[number]['valor']
 
 export function rotuloOrigem(valor: string | null | undefined): string {
+  if (valor === 'MISTA') return 'Mista'
   return ORIGENS.find((o) => o.valor === valor)?.rotulo ?? '—'
 }
 

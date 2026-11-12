@@ -2056,3 +2056,50 @@ textarea:focus {
     flex-wrap: wrap;
   }
 }
+
+/* ---------- Produtos dentro da garantia ---------- */
+.item-garantia {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  background: #fafaf8;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  border-left: 3px solid var(--marca);
+}
+.item-garantia-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.item-garantia-rodape {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.total-garantia {
+  color: var(--texto-suave);
+}
+.total-garantia strong {
+  color: var(--texto);
+  font-size: 1.1rem;
+}
+
+.or-mista {
+  background: #f4ecd2;
+  color: #6b4e00;
+}
+.tabela-itens td,
+.tabela-itens th {
+  vertical-align: middle;
+}
+
+.resumo-itens {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -33,6 +33,19 @@ import { nomeArquivoSeguro } from '../lib/exportar'
 import { Carregando, MensagemErro, SeloOrigem, SeloStatus } from '../components/Comuns'
 import { Confirmar, Modal } from '../components/Modal'
 
+interface ItemDetalhe {
+  id: number
+  ordem: number
+  origem: string
+  quantidade: number
+  valor_unitario: number | null
+  produto_marcas: {
+    referencia: string | null
+    produtos: { codigo: string | null; descricao: string } | null
+    marcas: { nome: string } | null
+  } | null
+}
+
 function Info({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
     <div className="info">
@@ -69,6 +82,7 @@ export function GarantiaDetalhe() {
   const [garantia, setGarantia] = useState<GarantiaVisao | null>(null)
   const [eventos, setEventos] = useState<Evento[]>([])
   const [anexos, setAnexos] = useState<Anexo[]>([])
+  const [itens, setItens] = useState<ItemDetalhe[]>([])
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [erro, setErro] = useState<string | null>(null)
   const [naoEncontrada, setNaoEncontrada] = useState(false)
@@ -94,14 +108,21 @@ export function GarantiaDetalhe() {
       return
     }
     try {
-      const [g, ev, an] = await Promise.all([
+      const [g, ev, an, it] = await Promise.all([
         supabase.from('vw_garantias').select('*').eq('id', id).maybeSingle(),
         supabase.from('garantia_eventos').select('*').eq('garantia_id', id).order('criado_em', { ascending: false }),
         supabase.from('anexos').select('*').eq('garantia_id', id).order('criado_em'),
+        supabase
+          .from('garantia_itens')
+          .select('id, ordem, origem, quantidade, valor_unitario, produto_marcas(referencia, produtos(codigo, descricao), marcas(nome))')
+          .eq('garantia_id', id)
+          .order('ordem')
+          .order('id'),
       ])
       if (g.error) throw g.error
       if (ev.error) throw ev.error
       if (an.error) throw an.error
+      if (it.error) throw it.error
       if (!g.data) {
         setNaoEncontrada(true)
         return
@@ -109,6 +130,7 @@ export function GarantiaDetalhe() {
       setGarantia(g.data)
       setEventos(ev.data)
       setAnexos(an.data)
+      setItens(it.data)
       setErro(null)
       if (an.data.length > 0) {
         const { data: assinadas, error } = await supabase.storage
@@ -133,7 +155,7 @@ export function GarantiaDetalhe() {
     void carregar()
   }, [carregar])
 
-  useTempoReal(['garantias', 'garantia_eventos', 'anexos'], carregar, idValido ? id : undefined)
+  useTempoReal(['garantias', 'garantia_itens', 'garantia_eventos', 'anexos'], carregar, idValido ? id : undefined)
 
   async function comentar(e: FormEvent) {
     e.preventDefault()
@@ -304,20 +326,10 @@ export function GarantiaDetalhe() {
           <Info rotulo="Cliente">
             <strong>{garantia.cliente_codigo}</strong> — {garantia.cliente_nome}
           </Info>
-          <Info rotulo="Peça">
-            {garantia.produto_codigo && <strong>{garantia.produto_codigo} — </strong>}
-            {garantia.produto_descricao}
-          </Info>
-          <Info rotulo="Marca">
-            {garantia.marca_nome}
-            {garantia.referencia && <span className="texto-suave"> (ref. {garantia.referencia})</span>}
-          </Info>
+          <Info rotulo="Empresa">{garantia.empresa_nome}</Info>
           <Info rotulo="Origem">
             <SeloOrigem origem={garantia.origem} />
           </Info>
-          <Info rotulo="Empresa">{garantia.empresa_nome}</Info>
-          <Info rotulo="Quantidade">{formatarQuantidade(garantia.quantidade)}</Info>
-          <Info rotulo="Valor unitário">{garantia.valor_unitario !== null ? formatarMoeda(garantia.valor_unitario) : null}</Info>
           <Info rotulo="Valor total">{garantia.valor_total !== null ? formatarMoeda(garantia.valor_total) : null}</Info>
           <Info rotulo="Resolução">{garantia.resolucao ? rotuloResolucao(garantia.resolucao) : null}</Info>
           <Info rotulo="NF de venda">{garantia.nota_fiscal_venda}</Info>
@@ -332,6 +344,45 @@ export function GarantiaDetalhe() {
             {garantia.atualizado_por_nome ?? '—'} em {formatarDataHora(garantia.atualizado_em)}
           </Info>
         </dl>
+        <div className="bloco-texto">
+          <h3>{itens.length > 1 ? `Produtos (${itens.length})` : 'Produto'}</h3>
+          <div className="tabela-container">
+            <table className="tabela tabela-simples tabela-itens">
+              <thead>
+                <tr>
+                  <th>Peça</th>
+                  <th>Marca</th>
+                  <th>Origem</th>
+                  <th className="num">Qtd.</th>
+                  <th className="num">Valor unit.</th>
+                  <th className="num">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((i) => (
+                  <tr key={i.id}>
+                    <td>
+                      {i.produto_marcas?.produtos?.codigo && <strong>{i.produto_marcas.produtos.codigo} — </strong>}
+                      {i.produto_marcas?.produtos?.descricao}
+                    </td>
+                    <td>
+                      {i.produto_marcas?.marcas?.nome}
+                      {i.produto_marcas?.referencia && <span className="texto-suave"> (ref. {i.produto_marcas.referencia})</span>}
+                    </td>
+                    <td>
+                      <SeloOrigem origem={i.origem} />
+                    </td>
+                    <td className="num">{formatarQuantidade(i.quantidade)}</td>
+                    <td className="num">{i.valor_unitario !== null ? formatarMoeda(i.valor_unitario) : '—'}</td>
+                    <td className="num">
+                      {i.valor_unitario !== null ? formatarMoeda(Math.round(i.quantidade * i.valor_unitario * 100) / 100) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div className="bloco-texto">
           <h3>Defeito / reclamação</h3>
           <p className="texto-preformatado">{garantia.defeito}</p>

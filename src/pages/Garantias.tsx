@@ -8,6 +8,7 @@ import { mensagemErro } from '../lib/erros'
 import { DIAS_ALERTA, ORIGENS, STATUS, STATUS_EM_ANDAMENTO, STATUS_FINAIS, ehStatus } from '../lib/constantes'
 import { diasDesde, formatarData, formatarQuantidade, hojeISO, numeroGarantia, padraoBusca } from '../lib/formato'
 import { exportarGarantiasExcel } from '../lib/exportar'
+import type { ItemExportacao } from '../lib/exportar'
 import { Carregando, MensagemErro, Paginacao, SeloOrigem, SeloStatus, Vazio } from '../components/Comuns'
 import { useAvisos } from '../components/Avisos'
 
@@ -48,7 +49,8 @@ function consultaGarantias(f: Filtros, ordem: Ordem, contar: boolean) {
   else if (f.status === 'atrasadas') q = q.in('status', [...STATUS_EM_ANDAMENTO]).lt('data_abertura', dataMenosDias(DIAS_ALERTA))
   else if (ehStatus(f.status)) q = q.eq('status', f.status)
   if (/^\d+$/.test(f.empresa)) q = q.eq('empresa_id', Number(f.empresa))
-  if (f.origem === 'NACIONAL' || f.origem === 'IMPORTADO') q = q.eq('origem', f.origem)
+  if (f.origem === 'NACIONAL') q = q.eq('tem_nacional', true)
+  else if (f.origem === 'IMPORTADO') q = q.eq('tem_importado', true)
   if (/^\d{4}-\d{2}-\d{2}$/.test(f.de)) q = q.gte('data_abertura', f.de)
   if (/^\d{4}-\d{2}-\d{2}$/.test(f.ate)) q = q.lte('data_abertura', f.ate)
   for (const [coluna, asc] of ORDENS[ordem].colunas) q = q.order(coluna, { ascending: asc })
@@ -145,7 +147,17 @@ export function Garantias() {
         avisar('Nenhuma garantia para exportar com estes filtros.', 'info')
         return
       }
-      await exportarGarantiasExcel(todas)
+      const itens: ItemExportacao[] = []
+      for (let i = 0; i < todas.length; i += 200) {
+        const ids = todas.slice(i, i + 200).map((g) => g.id!)
+        const { data, error } = await supabase
+          .from('garantia_itens')
+          .select('garantia_id, ordem, origem, quantidade, valor_unitario, produto_marcas(referencia, produtos(codigo, descricao), marcas(nome))')
+          .in('garantia_id', ids)
+        if (error) throw error
+        itens.push(...data)
+      }
+      await exportarGarantiasExcel(todas, itens)
       avisar(`${todas.length} garantia(s) exportada(s) para Excel.`)
     } catch (e) {
       avisar(mensagemErro(e), 'erro')
@@ -269,7 +281,7 @@ export function Garantias() {
                   <th>Nº</th>
                   <th>Abertura</th>
                   <th>Cliente</th>
-                  <th>Peça / marca</th>
+                  <th>Peças</th>
                   <th className="num">Qtd.</th>
                   <th>Origem</th>
                   <th>Empresa</th>
@@ -307,10 +319,11 @@ export function Garantias() {
                       <td data-rotulo="Cliente">
                         <span className="texto-suave">{g.cliente_codigo}</span> {g.cliente_nome}
                       </td>
-                      <td data-rotulo="Peça / marca">
-                        {g.produto_codigo && <span className="texto-suave">{g.produto_codigo} </span>}
-                        {g.produto_descricao}
-                        <div className="texto-pequeno">{g.marca_nome}</div>
+                      <td data-rotulo="Peças">
+                        <span className="resumo-itens" title={g.itens_resumo ?? ''}>
+                          {g.itens_resumo}
+                        </span>
+                        {(g.qtd_itens ?? 0) > 1 && <div className="texto-pequeno texto-suave">{g.qtd_itens} produtos</div>}
                       </td>
                       <td data-rotulo="Qtd." className="num">
                         {formatarQuantidade(g.quantidade)}

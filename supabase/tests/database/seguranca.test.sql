@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(65);
+select plan(76);
 
 -- ---------------------------------------------------------------------------
 -- Preparação: usuários de teste (o gatilho cria o perfil automaticamente)
@@ -80,9 +80,13 @@ select is((select count(*)::int from empresas), 0, 'inativo: não vê empresas')
 select is((select count(*)::int from clientes), 0, 'inativo: não vê clientes');
 select is((select count(*)::int from vw_garantias), 0, 'inativo: não vê garantias');
 select throws_ok(
-  $$insert into garantias (empresa_id, cliente_id, produto_id, marca_id, origem, quantidade, defeito)
-    select empresa_id, cliente_id, produto_id, marca_id, 'NACIONAL', 1, 'Teste inativo' from ids$$,
+  $$insert into garantias (empresa_id, cliente_id, defeito)
+    select empresa_id, cliente_id, 'Teste inativo' from ids$$,
   '42501', null, 'inativo: não registra garantia'
+);
+select throws_ok(
+  $$select salvar_garantia('{"empresa_id":1,"cliente_id":1,"defeito":"xxx"}'::jsonb, '[]'::jsonb)$$,
+  '42501', null, 'inativo: não usa salvar_garantia'
 );
 reset role;
 
@@ -93,9 +97,56 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal1","email":"operador@pgtap.local"}', true);
 
 select lives_ok(
-  $$insert into garantias (empresa_id, cliente_id, produto_id, marca_id, origem, quantidade, defeito)
-    select empresa_id, cliente_id, produto_id, marca_id, 'IMPORTADO', 2, 'Peça com trinca' from ids$$,
-  'operador: registra garantia'
+  $$select salvar_garantia(
+      jsonb_build_object('empresa_id', empresa_id, 'cliente_id', cliente_id, 'defeito', 'Peça com trinca'),
+      jsonb_build_array(
+        jsonb_build_object('produto_id', produto_id, 'marca_id', marca_id, 'origem', 'IMPORTADO', 'quantidade', 2, 'valor_unitario', 10),
+        jsonb_build_object('produto_id', produto_id, 'marca_id', marca_id, 'origem', 'NACIONAL', 'quantidade', 1, 'valor_unitario', 5.5)
+      )) from ids$$,
+  'operador: registra garantia com 2 produtos'
+);
+select is(
+  (select count(*)::int from garantia_itens where garantia_id = (select max(id) from garantias)),
+  2, 'garantia guarda os 2 itens'
+);
+select is(
+  (select qtd_itens || '/' || origem || '/' || valor_total from vw_garantias where id = (select max(id) from garantias)),
+  '2/MISTA/25.50', 'visão soma os itens e marca origem MISTA'
+);
+select throws_ok(
+  $$select salvar_garantia(
+      jsonb_build_object('empresa_id', empresa_id, 'cliente_id', cliente_id, 'defeito', 'Falha atômica'),
+      jsonb_build_array(
+        jsonb_build_object('produto_id', produto_id, 'marca_id', marca_id, 'origem', 'NACIONAL', 'quantidade', 1),
+        jsonb_build_object('produto_id', produto_id, 'marca_id', 999999, 'origem', 'NACIONAL', 'quantidade', 1)
+      )) from ids$$,
+  '23503', null, 'operador: item com marca que não pertence ao produto é recusado'
+);
+select is(
+  (select count(*)::int from garantias where defeito = 'Falha atômica'), 0,
+  'operador: se um item falha, a garantia NÃO fica salva pela metade'
+);
+select throws_ok(
+  $$select salvar_garantia(jsonb_build_object('empresa_id', empresa_id, 'cliente_id', cliente_id, 'defeito', 'Sem itens'), '[]'::jsonb) from ids$$,
+  '22023', null, 'operador: garantia sem produtos é recusada'
+);
+select lives_ok(
+  $$select salvar_garantia(
+      jsonb_build_object('empresa_id', empresa_id, 'cliente_id', cliente_id, 'defeito', 'Peça com trinca (editada)'),
+      jsonb_build_array(jsonb_build_object('produto_id', produto_id, 'marca_id', marca_id, 'origem', 'IMPORTADO', 'quantidade', 4)),
+      (select max(id) from garantias)) from ids$$,
+  'operador: edita a garantia trocando os produtos'
+);
+select is(
+  (select count(*)::int from garantia_eventos where tipo = 'EDICAO' and descricao like '%produtos%' and garantia_id = (select max(id) from garantias)),
+  1, 'edição dos produtos aparece no histórico'
+);
+select throws_ok(
+  $$select salvar_garantia(
+      jsonb_build_object('empresa_id', empresa_id, 'cliente_id', cliente_id, 'defeito', 'Conflito'),
+      jsonb_build_array(jsonb_build_object('produto_id', produto_id, 'marca_id', marca_id, 'origem', 'NACIONAL', 'quantidade', 1)),
+      (select max(id) from garantias), now() - interval '1 day') from ids$$,
+  'P0001', null, 'operador: edição baseada em dados desatualizados é recusada'
 );
 select is(
   (select criado_por from garantias order by id desc limit 1),
@@ -199,16 +250,24 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 
 select is((select count(*)::int from vw_garantias where cliente_id = (select cliente_id from ids)), 1, 'consulta: vê as garantias');
 select throws_ok(
-  $$insert into garantias (empresa_id, cliente_id, produto_id, marca_id, origem, quantidade, defeito)
-    select empresa_id, cliente_id, produto_id, marca_id, 'NACIONAL', 1, 'Teste consulta' from ids$$,
+  $$insert into garantias (empresa_id, cliente_id, defeito)
+    select empresa_id, cliente_id, 'Teste consulta' from ids$$,
   '42501', null, 'consulta: não registra garantia'
 );
 select is_empty(
-  $$update garantias set quantidade = 99 returning 1$$,
+  $$update garantias set defeito = 'alterado pela consulta' returning 1$$,
   'consulta: não altera garantia'
 );
 select throws_ok(
   $$select alterar_status((select max(id) from garantias), 'CANCELADA')$$, '42501', null, 'consulta: não altera status'
+);
+select throws_ok(
+  $$select salvar_garantia('{"empresa_id":1,"cliente_id":1,"defeito":"xxx"}'::jsonb, '[{"produto_id":1,"marca_id":1,"origem":"NACIONAL","quantidade":1}]'::jsonb)$$,
+  '42501', null, 'consulta: não usa salvar_garantia'
+);
+select throws_ok(
+  $$insert into garantia_itens (garantia_id, produto_id, marca_id, origem, quantidade) values (1, 1, 1, 'NACIONAL', 1)$$,
+  '42501', null, 'consulta: não insere itens diretamente'
 );
 select throws_ok(
   $$insert into clientes (codigo, nome) values ('X', 'Y')$$, '42501', null, 'consulta: não cadastra cliente'

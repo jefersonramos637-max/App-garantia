@@ -153,10 +153,14 @@ test.describe('Programa para computador', () => {
         if (pm.error) throw pm.error
         const g = await svc
           .from('garantias')
-          .insert({ empresa_id: 1, cliente_id: c.data.id, produto_id: p.data.id, marca_id: m.data.id, origem: 'NACIONAL', quantidade: 1, defeito: 'Teste do programa' })
+          .insert({ empresa_id: 1, cliente_id: c.data.id, defeito: 'Teste do programa' })
           .select('id')
           .single()
         if (g.error) throw g.error
+        const it = await svc
+          .from('garantia_itens')
+          .insert({ garantia_id: g.data.id, ordem: 1, produto_id: p.data.id, marca_id: m.data.id, origem: 'NACIONAL', quantidade: 1 })
+        if (it.error) throw it.error
         ids.garantia = g.data.id
       })
 

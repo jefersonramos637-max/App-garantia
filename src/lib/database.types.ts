@@ -111,16 +111,48 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"garantias": {
+                },"garantia_itens": {
                   Row: {
-                    "atualizado_em": string,"atualizado_por": string | null,"cliente_id": number,"criado_em": string,"criado_por": string | null,"data_abertura": string,"data_conclusao": string | null,"data_venda": string | null,"defeito": string,"empresa_id": number,"fornecedor": string | null,"id": number,"marca_id": number,"nota_fiscal_compra": string | null,"nota_fiscal_venda": string | null,"observacoes": string | null,"origem": string,"produto_id": number,"protocolo_fornecedor": string | null,"quantidade": number,"resolucao": string | null,"status": string,"valor_unitario": number | null
+                    "garantia_id": number,"id": number,"marca_id": number,"ordem": number,"origem": string,"produto_id": number,"quantidade": number,"valor_unitario": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "atualizado_em"?: string,"atualizado_por"?: string | null,"cliente_id": number,"criado_em"?: string,"criado_por"?: string | null,"data_abertura"?: string,"data_conclusao"?: string | null,"data_venda"?: string | null,"defeito": string,"empresa_id": number,"fornecedor"?: string | null,"id"?: never,"marca_id": number,"nota_fiscal_compra"?: string | null,"nota_fiscal_venda"?: string | null,"observacoes"?: string | null,"origem": string,"produto_id": number,"protocolo_fornecedor"?: string | null,"quantidade": number,"resolucao"?: string | null,"status"?: string,"valor_unitario"?: number | null
+                    "garantia_id": number,"id"?: never,"marca_id": number,"ordem"?: number,"origem": string,"produto_id": number,"quantidade": number,"valor_unitario"?: number | null
                   }
                   Update: {
-                    "atualizado_em"?: string,"atualizado_por"?: string | null,"cliente_id"?: number,"criado_em"?: string,"criado_por"?: string | null,"data_abertura"?: string,"data_conclusao"?: string | null,"data_venda"?: string | null,"defeito"?: string,"empresa_id"?: number,"fornecedor"?: string | null,"id"?: never,"marca_id"?: number,"nota_fiscal_compra"?: string | null,"nota_fiscal_venda"?: string | null,"observacoes"?: string | null,"origem"?: string,"produto_id"?: number,"protocolo_fornecedor"?: string | null,"quantidade"?: number,"resolucao"?: string | null,"status"?: string,"valor_unitario"?: number | null
+                    "garantia_id"?: number,"id"?: never,"marca_id"?: number,"ordem"?: number,"origem"?: string,"produto_id"?: number,"quantidade"?: number,"valor_unitario"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "garantia_itens_garantia_id_fkey"
+      columns: ["garantia_id"]
+isOneToOne: false
+      referencedRelation: "garantias"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "garantia_itens_garantia_id_fkey"
+      columns: ["garantia_id"]
+isOneToOne: false
+      referencedRelation: "vw_garantias"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "garantia_itens_produto_marca_fk"
+      columns: ["produto_id","marca_id"]
+isOneToOne: false
+      referencedRelation: "produto_marcas"
+      referencedColumns: ["produto_id","marca_id"]
+    }
+                  ]
+                },"garantias": {
+                  Row: {
+                    "atualizado_em": string,"atualizado_por": string | null,"cliente_id": number,"criado_em": string,"criado_por": string | null,"data_abertura": string,"data_conclusao": string | null,"data_venda": string | null,"defeito": string,"empresa_id": number,"fornecedor": string | null,"id": number,"nota_fiscal_compra": string | null,"nota_fiscal_venda": string | null,"observacoes": string | null,"protocolo_fornecedor": string | null,"resolucao": string | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "atualizado_em"?: string,"atualizado_por"?: string | null,"cliente_id": number,"criado_em"?: string,"criado_por"?: string | null,"data_abertura"?: string,"data_conclusao"?: string | null,"data_venda"?: string | null,"defeito": string,"empresa_id": number,"fornecedor"?: string | null,"id"?: never,"nota_fiscal_compra"?: string | null,"nota_fiscal_venda"?: string | null,"observacoes"?: string | null,"protocolo_fornecedor"?: string | null,"resolucao"?: string | null,"status"?: string
+                  }
+                  Update: {
+                    "atualizado_em"?: string,"atualizado_por"?: string | null,"cliente_id"?: number,"criado_em"?: string,"criado_por"?: string | null,"data_abertura"?: string,"data_conclusao"?: string | null,"data_venda"?: string | null,"defeito"?: string,"empresa_id"?: number,"fornecedor"?: string | null,"id"?: never,"nota_fiscal_compra"?: string | null,"nota_fiscal_venda"?: string | null,"observacoes"?: string | null,"protocolo_fornecedor"?: string | null,"resolucao"?: string | null,"status"?: string
                   }
                   Relationships: [
                     {
@@ -147,12 +179,6 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "empresas"
       referencedColumns: ["id"]
-    },{
-      foreignKeyName: "garantias_produto_marca_fk"
-      columns: ["produto_id","marca_id"]
-isOneToOne: false
-      referencedRelation: "produto_marcas"
-      referencedColumns: ["produto_id","marca_id"]
     }
                   ]
                 },"marcas": {
@@ -228,7 +254,7 @@ isOneToOne: false
           Views: {
             "vw_garantias": {
                   Row: {
-                    "atualizado_em": string,"atualizado_por": string | null,"atualizado_por_nome": string | null,"busca": string | null,"cliente_codigo": string,"cliente_id": number,"cliente_nome": string,"criado_em": string,"criado_por": string | null,"criado_por_nome": string | null,"data_abertura": string,"data_conclusao": string | null,"data_venda": string | null,"defeito": string,"empresa_id": number,"empresa_nome": string,"empresa_tipo": string,"fornecedor": string | null,"id": number,"marca_id": number,"marca_nome": string,"nota_fiscal_compra": string | null,"nota_fiscal_venda": string | null,"observacoes": string | null,"origem": string,"produto_codigo": string | null,"produto_descricao": string,"produto_id": number,"protocolo_fornecedor": string | null,"quantidade": number,"referencia": string | null,"resolucao": string | null,"status": string,"valor_total": number | null,"valor_unitario": number | null
+                    "atualizado_em": string,"atualizado_por": string | null,"atualizado_por_nome": string | null,"busca": string | null,"cliente_codigo": string,"cliente_id": number,"cliente_nome": string,"criado_em": string,"criado_por": string | null,"criado_por_nome": string | null,"data_abertura": string,"data_conclusao": string | null,"data_venda": string | null,"defeito": string,"empresa_id": number,"empresa_nome": string,"empresa_tipo": string,"fornecedor": string | null,"id": number,"itens_resumo": string | null,"nota_fiscal_compra": string | null,"nota_fiscal_venda": string | null,"observacoes": string | null,"origem": string | null,"protocolo_fornecedor": string | null,"qtd_itens": number | null,"quantidade": number | null,"resolucao": string | null,"status": string,"tem_importado": boolean | null,"tem_nacional": boolean | null,"valor_total": number | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -256,12 +282,6 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "empresas"
       referencedColumns: ["id"]
-    },{
-      foreignKeyName: "garantias_produto_marca_fk"
-      columns: ["produto_id","marca_id"]
-isOneToOne: false
-      referencedRelation: "produto_marcas"
-      referencedColumns: ["produto_id","marca_id"]
     }
                   ]
                 }
@@ -301,6 +321,9 @@ isOneToOne: false
                            },
 "resumo_garantias":
 { Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"salvar_garantia":
+{ Args: { "p_atualizado_em"?: string,"p_dados": Json,"p_id"?: number,"p_itens": Json }; Returns: number
                            },
 "salvar_produto":
 { Args: { "p_ativo": boolean,"p_codigo": string,"p_descricao": string,"p_id"?: number,"p_marcas": Json }; Returns: number

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -10,6 +10,7 @@ import { mensagemErro } from '../lib/erros'
 import { ORIGENS, RESOLUCOES, STATUS, ehStatus } from '../lib/constantes'
 import type { Origem, Status } from '../lib/constantes'
 import { formatarMoeda, hojeISO, lerNumeroBR, numeroGarantia, numeroParaCampo, padraoBusca } from '../lib/formato'
+import type { Json } from '../lib/database.types'
 import { Autocompletar } from '../components/Autocompletar'
 import { Campo, Carregando, MensagemErro } from '../components/Comuns'
 import { FormCliente, FormProduto } from '../components/Formularios'
@@ -27,6 +28,61 @@ interface MarcaDoProduto {
 }
 
 type Erros = Partial<Record<string, string>>
+
+/** Um produto dentro da garantia. */
+interface ItemForm {
+  chave: number
+  produto: ProdutoOpcao | null
+  marcas: MarcaDoProduto[]
+  carregandoMarcas: boolean
+  marcaId: number | null
+  origem: Origem | ''
+  origemSugerida: boolean
+  quantidade: string
+  valor: string
+}
+
+const MAXIMO_ITENS = 50
+let proximaChave = 1
+
+function itemVazio(): ItemForm {
+  return {
+    chave: proximaChave++,
+    produto: null,
+    marcas: [],
+    carregandoMarcas: false,
+    marcaId: null,
+    origem: '',
+    origemSugerida: false,
+    quantidade: '1',
+    valor: '',
+  }
+}
+
+async function carregarMarcasDoProduto(produtoId: number, manterMarcaId: number | null): Promise<MarcaDoProduto[]> {
+  const { data, error } = await supabase
+    .from('produto_marcas')
+    .select('marca_id, origem_padrao, referencia, ativo, marcas(nome, ativo)')
+    .eq('produto_id', produtoId)
+  if (error) throw error
+  return data
+    .map((pm) => ({
+      marca_id: pm.marca_id,
+      nome: pm.marcas?.nome ?? '?',
+      origem_padrao: pm.origem_padrao,
+      referencia: pm.referencia,
+      ativo: pm.ativo && (pm.marcas?.ativo ?? false),
+    }))
+    .filter((m) => m.ativo || m.marca_id === manterMarcaId)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+}
+
+function totalDoItem(i: ItemForm): number | null {
+  const q = lerNumeroBR(i.quantidade)
+  const v = lerNumeroBR(i.valor)
+  if (q === null || v === null || Number.isNaN(q) || Number.isNaN(v)) return null
+  return q * v
+}
 
 async function buscarClientes(termo: string): Promise<ClienteOpcao[]> {
   let q = supabase.from('clientes').select('id, codigo, nome, cidade, uf').eq('ativo', true).order('nome').limit(20)
@@ -65,14 +121,7 @@ export function GarantiaForm() {
 
   const [empresaId, setEmpresaId] = useState<number | null>(null)
   const [cliente, setCliente] = useState<ClienteOpcao | null>(null)
-  const [produto, setProduto] = useState<ProdutoOpcao | null>(null)
-  const [marcasProduto, setMarcasProduto] = useState<MarcaDoProduto[]>([])
-  const [carregandoMarcas, setCarregandoMarcas] = useState(false)
-  const [marcaId, setMarcaId] = useState<number | null>(null)
-  const [origem, setOrigem] = useState<Origem | ''>('')
-  const [origemSugerida, setOrigemSugerida] = useState(false)
-  const [quantidade, setQuantidade] = useState('1')
-  const [valorUnitario, setValorUnitario] = useState('')
+  const [itens, setItens] = useState<ItemForm[]>(() => [itemVazio()])
   const [status, setStatus] = useState<Status>('ABERTA')
   const [resolucao, setResolucao] = useState('')
   const [dataAbertura, setDataAbertura] = useState(hojeISO())
@@ -90,8 +139,9 @@ export function GarantiaForm() {
   const [salvando, setSalvando] = useState(false)
   const [alterado, setAlterado] = useState(false)
   const [modalCliente, setModalCliente] = useState<{ aberto: boolean; texto: string }>({ aberto: false, texto: '' })
-  const [modalProduto, setModalProduto] = useState<{ aberto: boolean; id: number | null; texto: string }>({
+  const [modalProduto, setModalProduto] = useState<{ aberto: boolean; chave: number | null; id: number | null; texto: string }>({
     aberto: false,
+    chave: null,
     id: null,
     texto: '',
   })
@@ -124,53 +174,47 @@ export function GarantiaForm() {
       })
   }, [])
 
-  const carregarMarcas = useCallback(async (produtoId: number, manterMarcaId: number | null) => {
-    setCarregandoMarcas(true)
-    try {
-      const { data, error } = await supabase
-        .from('produto_marcas')
-        .select('marca_id, origem_padrao, referencia, ativo, marcas(nome, ativo)')
-        .eq('produto_id', produtoId)
-      if (error) throw error
-      const lista = data
-        .map((pm) => ({
-          marca_id: pm.marca_id,
-          nome: pm.marcas?.nome ?? '?',
-          origem_padrao: pm.origem_padrao,
-          referencia: pm.referencia,
-          ativo: pm.ativo && (pm.marcas?.ativo ?? false),
-        }))
-        .filter((m) => m.ativo || m.marca_id === manterMarcaId)
-        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-      setMarcasProduto(lista)
-      return lista
-    } catch (e) {
-      setErroGeral(mensagemErro(e))
-      setMarcasProduto([])
-      return []
-    } finally {
-      setCarregandoMarcas(false)
-    }
-  }, [])
-
-  // Edição: carrega a garantia
+  // Edição: carrega a garantia e os seus produtos
   useEffect(() => {
     if (!editando || idGarantia === null) return
     let cancelado = false
     ;(async () => {
       try {
         if (!Number.isSafeInteger(idGarantia) || idGarantia <= 0) throw new Error('Garantia não encontrada.')
-        const { data: g, error } = await supabase.from('vw_garantias').select('*').eq('id', idGarantia).maybeSingle()
-        if (error) throw error
+        const [gar, its] = await Promise.all([
+          supabase.from('vw_garantias').select('*').eq('id', idGarantia).maybeSingle(),
+          supabase
+            .from('garantia_itens')
+            .select('id, ordem, produto_id, marca_id, origem, quantidade, valor_unitario, produto_marcas(produtos(id, codigo, descricao))')
+            .eq('garantia_id', idGarantia)
+            .order('ordem')
+            .order('id'),
+        ])
+        if (gar.error) throw gar.error
+        if (its.error) throw its.error
+        const g = gar.data
         if (!g) throw new Error('Garantia não encontrada.')
+        const carregados: ItemForm[] = await Promise.all(
+          its.data.map(async (it) => {
+            const prod = it.produto_marcas?.produtos
+            const marcas = await carregarMarcasDoProduto(it.produto_id, it.marca_id)
+            return {
+              chave: proximaChave++,
+              produto: prod ? { id: prod.id, codigo: prod.codigo, descricao: prod.descricao } : null,
+              marcas,
+              carregandoMarcas: false,
+              marcaId: it.marca_id,
+              origem: (it.origem ?? '') as Origem | '',
+              origemSugerida: false,
+              quantidade: numeroParaCampo(it.quantidade),
+              valor: numeroParaCampo(it.valor_unitario),
+            }
+          }),
+        )
         if (cancelado) return
+        setItens(carregados.length ? carregados : [itemVazio()])
         setEmpresaId(g.empresa_id)
         setCliente({ id: g.cliente_id!, codigo: g.cliente_codigo ?? '', nome: g.cliente_nome ?? '', cidade: null, uf: null })
-        setProduto({ id: g.produto_id!, codigo: g.produto_codigo, descricao: g.produto_descricao ?? '' })
-        setMarcaId(g.marca_id)
-        setOrigem((g.origem ?? '') as Origem | '')
-        setQuantidade(numeroParaCampo(g.quantidade))
-        setValorUnitario(numeroParaCampo(g.valor_unitario))
         setStatus(ehStatus(g.status) ? g.status : 'ABERTA')
         setResolucao(g.resolucao ?? '')
         setDataAbertura(g.data_abertura ?? hojeISO())
@@ -182,7 +226,6 @@ export function GarantiaForm() {
         setDefeito(g.defeito ?? '')
         setObservacoes(g.observacoes ?? '')
         setAtualizadoEm(g.atualizado_em)
-        await carregarMarcas(g.produto_id!, g.marca_id)
       } catch (e) {
         if (!cancelado) setErroCarga(e instanceof Error && e.message.startsWith('Garantia') ? e.message : mensagemErro(e))
       } finally {
@@ -192,59 +235,99 @@ export function GarantiaForm() {
     return () => {
       cancelado = true
     }
-  }, [editando, idGarantia, carregarMarcas])
+  }, [editando, idGarantia])
 
-  async function escolherProduto(p: ProdutoOpcao | null) {
-    setProduto(p)
-    setMarcaId(null)
-    setMarcasProduto([])
-    if (origemSugerida) {
-      setOrigem('')
-      setOrigemSugerida(false)
-    }
-    marcar('produto', 'marca')
-    if (!p) return
-    const lista = await carregarMarcas(p.id, null)
-    if (lista.length === 1) escolherMarca(lista[0].marca_id, lista)
+  // ---------- Produtos da garantia ----------
+  function alterarItem(chave: number, mudancas: Partial<ItemForm>, ...camposComErro: string[]) {
+    setItens((lista) => lista.map((i) => (i.chave === chave ? { ...i, ...mudancas } : i)))
+    marcar(...camposComErro.map((c) => `i${chave}.${c}`))
   }
 
-  function escolherMarca(id: number | null, lista: MarcaDoProduto[] = marcasProduto) {
-    setMarcaId(id)
-    marcar('marca')
+  function escolherMarca(chave: number, id: number | null, lista: MarcaDoProduto[]) {
     const m = lista.find((x) => x.marca_id === id)
-    if (m?.origem_padrao === 'NACIONAL' || m?.origem_padrao === 'IMPORTADO') {
-      setOrigem(m.origem_padrao)
-      setOrigemSugerida(true)
-      marcar('origem')
-    } else if (origemSugerida) {
-      setOrigem('')
-      setOrigemSugerida(false)
+    setItens((todos) =>
+      todos.map((i) => {
+        if (i.chave !== chave) return i
+        if (m?.origem_padrao === 'NACIONAL' || m?.origem_padrao === 'IMPORTADO') {
+          return { ...i, marcaId: id, origem: m.origem_padrao, origemSugerida: true }
+        }
+        return { ...i, marcaId: id, origem: i.origemSugerida ? '' : i.origem, origemSugerida: false }
+      }),
+    )
+    marcar(`i${chave}.marca`, `i${chave}.origem`)
+  }
+
+  async function escolherProduto(chave: number, p: ProdutoOpcao | null) {
+    setItens((todos) =>
+      todos.map((i) =>
+        i.chave === chave
+          ? {
+              ...i,
+              produto: p,
+              marcaId: null,
+              marcas: [],
+              carregandoMarcas: p !== null,
+              origem: i.origemSugerida ? '' : i.origem,
+              origemSugerida: false,
+            }
+          : i,
+      ),
+    )
+    marcar(`i${chave}.produto`, `i${chave}.marca`)
+    if (!p) return
+    try {
+      const lista = await carregarMarcasDoProduto(p.id, null)
+      setItens((todos) => todos.map((i) => (i.chave === chave ? { ...i, marcas: lista, carregandoMarcas: false } : i)))
+      if (lista.length === 1) escolherMarca(chave, lista[0].marca_id, lista)
+    } catch (e) {
+      setErroGeral(mensagemErro(e))
+      setItens((todos) => todos.map((i) => (i.chave === chave ? { ...i, carregandoMarcas: false } : i)))
     }
   }
 
-  const valorNumero = lerNumeroBR(valorUnitario)
-  const quantidadeNumero = lerNumeroBR(quantidade)
-  const total = useMemo(
-    () =>
-      valorNumero !== null && !Number.isNaN(valorNumero) && quantidadeNumero !== null && !Number.isNaN(quantidadeNumero)
-        ? valorNumero * quantidadeNumero
-        : null,
-    [valorNumero, quantidadeNumero],
-  )
+  async function recarregarMarcas(chave: number, produtoId: number) {
+    const atual = itens.find((i) => i.chave === chave)
+    try {
+      const lista = await carregarMarcasDoProduto(produtoId, atual?.marcaId ?? null)
+      setItens((todos) => todos.map((i) => (i.chave === chave ? { ...i, marcas: lista } : i)))
+      if (atual && !atual.marcaId && lista.length === 1) escolherMarca(chave, lista[0].marca_id, lista)
+    } catch (e) {
+      setErroGeral(mensagemErro(e))
+    }
+  }
+
+  function adicionarItem() {
+    if (itens.length >= MAXIMO_ITENS) return
+    setItens((lista) => [...lista, itemVazio()])
+    marcar()
+  }
+
+  function removerItem(chave: number) {
+    setItens((lista) => (lista.length > 1 ? lista.filter((i) => i.chave !== chave) : lista))
+    marcar()
+  }
+
+  const totalGeral = useMemo(() => {
+    const somas = itens.map(totalDoItem).filter((v): v is number => v !== null)
+    return somas.length ? somas.reduce((a, b) => a + b, 0) : null
+  }, [itens])
 
   function validar(): Erros {
     const e: Erros = {}
     if (!empresaId) e.empresa = 'Escolha a empresa (Lojão dos Tratores ou LL Tratores).'
     if (!cliente) e.cliente = 'Selecione o cliente.'
-    if (!produto) e.produto = 'Selecione a peça.'
-    if (produto && !marcaId) e.marca = 'Selecione a marca.'
-    if (!origem) e.origem = 'Informe se o produto é nacional ou importado.'
-    if (quantidadeNumero === null) e.quantidade = 'Informe a quantidade.'
-    else if (Number.isNaN(quantidadeNumero) || quantidadeNumero <= 0) e.quantidade = 'Quantidade inválida.'
-    else if (quantidadeNumero > 1_000_000) e.quantidade = 'Quantidade muito alta.'
-    else if (Math.round(quantidadeNumero * 1000) / 1000 !== quantidadeNumero) e.quantidade = 'Use no máximo 3 casas decimais.'
-    if (valorNumero !== null && (Number.isNaN(valorNumero) || valorNumero < 0 || valorNumero > 100_000_000)) {
-      e.valor = 'Valor inválido. Exemplo: 1.234,56'
+    for (const i of itens) {
+      const k = (c: string) => `i${i.chave}.${c}`
+      if (!i.produto) e[k('produto')] = 'Selecione a peça.'
+      if (i.produto && !i.marcaId) e[k('marca')] = 'Selecione a marca.'
+      if (!i.origem) e[k('origem')] = 'Informe se o produto é nacional ou importado.'
+      const q = lerNumeroBR(i.quantidade)
+      if (q === null) e[k('quantidade')] = 'Informe a quantidade.'
+      else if (Number.isNaN(q) || q <= 0) e[k('quantidade')] = 'Quantidade inválida.'
+      else if (q > 1_000_000) e[k('quantidade')] = 'Quantidade muito alta.'
+      else if (Math.round(q * 1000) / 1000 !== q) e[k('quantidade')] = 'Use no máximo 3 casas decimais.'
+      const v = lerNumeroBR(i.valor)
+      if (v !== null && (Number.isNaN(v) || v < 0 || v > 100_000_000)) e[k('valor')] = 'Valor inválido. Exemplo: 1.234,56'
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataAbertura)) e.dataAbertura = 'Informe a data de abertura.'
     else if (dataAbertura > hojeISO()) e.dataAbertura = 'A data de abertura não pode ser no futuro.'
@@ -264,14 +347,11 @@ export function GarantiaForm() {
       return
     }
     setSalvando(true)
-    const dados = {
+    const dados: Json = {
       empresa_id: empresaId!,
       cliente_id: cliente!.id,
-      produto_id: produto!.id,
-      marca_id: marcaId!,
-      origem: origem as Origem,
-      quantidade: quantidadeNumero!,
-      valor_unitario: valorNumero,
+      ...(editando ? {} : { status }),
+      resolucao: resolucao || null,
       data_abertura: dataAbertura,
       nota_fiscal_venda: nfVenda.trim() || null,
       data_venda: dataVenda || null,
@@ -281,36 +361,31 @@ export function GarantiaForm() {
       defeito: defeito.trim(),
       observacoes: observacoes.trim() || null,
     }
+    const lista: Json = itens.map((i) => ({
+      produto_id: i.produto!.id,
+      marca_id: i.marcaId!,
+      origem: i.origem,
+      quantidade: lerNumeroBR(i.quantidade)!,
+      valor_unitario: lerNumeroBR(i.valor),
+    }))
     try {
-      if (editando && idGarantia !== null) {
-        let consulta = supabase
-          .from('garantias')
-          .update({ ...dados, resolucao: resolucao || null })
-          .eq('id', idGarantia)
-        if (atualizadoEm) consulta = consulta.eq('atualizado_em', atualizadoEm)
-        const { data, error } = await consulta.select('id')
-        if (error) throw error
-        if (!data || data.length === 0) {
-          throw new Error(
-            'Esta garantia foi alterada por outra pessoa enquanto você editava. Copie suas alterações, recarregue a página e tente novamente.',
-          )
-        }
-        setAlterado(false)
-        avisar(`Garantia Nº ${numeroGarantia(idGarantia)} atualizada.`)
-        navegar(`/garantias/${idGarantia}`)
+      const { data: id, error } = await supabase.rpc('salvar_garantia', {
+        p_dados: dados,
+        p_itens: lista,
+        p_id: editando && idGarantia !== null ? idGarantia : undefined,
+        p_atualizado_em: editando && atualizadoEm ? atualizadoEm : undefined,
+      })
+      if (error) throw error
+      setAlterado(false)
+      if (editando) {
+        avisar(`Garantia Nº ${numeroGarantia(id)} atualizada.`)
+        navegar(`/garantias/${id}`)
       } else {
-        const { data, error } = await supabase
-          .from('garantias')
-          .insert({ ...dados, status, resolucao: resolucao || null })
-          .select('id')
-          .single()
-        if (error) throw error
-        setAlterado(false)
-        avisar(`Garantia Nº ${numeroGarantia(data.id)} registrada com sucesso.`)
-        navegar(`/garantias/${data.id}`, { replace: true })
+        avisar(`Garantia Nº ${numeroGarantia(id)} registrada com sucesso.`)
+        navegar(`/garantias/${id}`, { replace: true })
       }
     } catch (e) {
-      setErroGeral(e instanceof Error && e.message.startsWith('Esta garantia') ? e.message : mensagemErro(e))
+      setErroGeral(mensagemErro(e))
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setSalvando(false)
@@ -333,8 +408,6 @@ export function GarantiaForm() {
       </div>
     )
   }
-
-  const marcaSelecionada = marcasProduto.find((m) => m.marca_id === marcaId)
 
   return (
     <div className="pagina pagina-formulario">
@@ -372,7 +445,7 @@ export function GarantiaForm() {
         </fieldset>
 
         <fieldset className="grupo">
-          <legend>Cliente e peça</legend>
+          <legend>Cliente</legend>
           <Campo rotulo="Cliente" htmlFor="cliente" obrigatorio erro={erros.cliente} ajuda="Busque pelo código ou nome.">
             <Autocompletar<ClienteOpcao>
               id="cliente"
@@ -390,127 +463,156 @@ export function GarantiaForm() {
               acaoExtra={{ texto: '+ Cadastrar novo cliente', aoClicar: (t) => setModalCliente({ aberto: true, texto: t }) }}
             />
           </Campo>
+        </fieldset>
 
-          <Campo rotulo="Peça / produto" htmlFor="produto" obrigatorio erro={erros.produto} ajuda="Busque pelo código ou descrição.">
-            <Autocompletar<ProdutoOpcao>
-              id="produto"
-              valor={produto}
-              aoSelecionar={(p) => void escolherProduto(p)}
-              buscar={buscarProdutos}
-              rotulo={(p) => (p.codigo ? `${p.codigo} — ${p.descricao}` : p.descricao)}
-              chave={(p) => p.id}
-              placeholder="Código ou descrição da peça"
-              invalido={!!erros.produto}
-              acaoExtra={{
-                texto: '+ Cadastrar novo produto',
-                aoClicar: (t) => setModalProduto({ aberto: true, id: null, texto: t }),
-              }}
-            />
-          </Campo>
-
-          {produto && (
-            <Campo rotulo="Marca" htmlFor="marca" obrigatorio erro={erros.marca}>
-              {carregandoMarcas ? (
-                <Carregando texto="Carregando marcas…" />
-              ) : marcasProduto.length === 0 ? (
-                <div className="alerta alerta-info">
-                  Este produto ainda não tem marcas cadastradas.{' '}
-                  <button
-                    type="button"
-                    className="botao-link"
-                    onClick={() => setModalProduto({ aberto: true, id: produto.id, texto: '' })}
-                  >
-                    Adicionar marca ao produto
-                  </button>
+        <fieldset className="grupo">
+          <legend>Produtos da garantia ({itens.length})</legend>
+          {itens.map((item, indice) => {
+            const sufixo = indice + 1
+            const k = (c: string) => `i${item.chave}.${c}`
+            const marcaSelecionada = item.marcas.find((m) => m.marca_id === item.marcaId)
+            const totalItem = totalDoItem(item)
+            return (
+              <div className="item-garantia" key={item.chave} role="group" aria-label={`Produto ${sufixo}`}>
+                <div className="item-garantia-cabecalho">
+                  <strong>Produto {sufixo}</strong>
+                  {itens.length > 1 && (
+                    <button type="button" className="botao-link texto-perigo" onClick={() => removerItem(item.chave)}>
+                      Remover
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <div className="linha-campo">
-                  <select
-                    id="marca"
-                    value={marcaId ?? ''}
-                    aria-invalid={!!erros.marca || undefined}
-                    onChange={(e) => escolherMarca(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">Selecione a marca…</option>
-                    {marcasProduto.map((m) => (
-                      <option key={m.marca_id} value={m.marca_id}>
-                        {m.nome}
-                        {m.referencia ? ` (ref. ${m.referencia})` : ''}
-                        {m.ativo ? '' : ' — inativa'}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="botao botao-secundario botao-pequeno"
-                    onClick={() => setModalProduto({ aberto: true, id: produto.id, texto: '' })}
-                  >
-                    Outra marca…
-                  </button>
-                </div>
-              )}
-            </Campo>
-          )}
 
-          <fieldset className="grupo-interno">
-            <legend>
-              Origem do produto <span className="obrigatorio">*</span>
-            </legend>
-            <div className="opcoes-linha" role="radiogroup" aria-label="Origem do produto">
-              {ORIGENS.map((o) => (
-                <label key={o.valor} className={origem === o.valor ? 'opcao-pilula selecionada' : 'opcao-pilula'}>
-                  <input
-                    type="radio"
-                    name="origem"
-                    value={o.valor}
-                    checked={origem === o.valor}
-                    onChange={() => {
-                      setOrigem(o.valor)
-                      setOrigemSugerida(false)
-                      marcar('origem')
+                <Campo
+                  rotulo="Peça / produto"
+                  htmlFor={`produto-${item.chave}`}
+                  obrigatorio
+                  erro={erros[k('produto')]}
+                  ajuda="Busque pelo código ou descrição."
+                >
+                  <Autocompletar<ProdutoOpcao>
+                    id={`produto-${item.chave}`}
+                    valor={item.produto}
+                    aoSelecionar={(p) => void escolherProduto(item.chave, p)}
+                    buscar={buscarProdutos}
+                    rotulo={(p) => (p.codigo ? `${p.codigo} — ${p.descricao}` : p.descricao)}
+                    chave={(p) => p.id}
+                    placeholder="Código ou descrição da peça"
+                    invalido={!!erros[k('produto')]}
+                    acaoExtra={{
+                      texto: '+ Cadastrar novo produto',
+                      aoClicar: (t) => setModalProduto({ aberto: true, chave: item.chave, id: null, texto: t }),
                     }}
                   />
-                  {o.rotulo}
-                </label>
-              ))}
-            </div>
-            {origemSugerida && marcaSelecionada && (
-              <small className="ajuda">Preenchido pelo cadastro da marca {marcaSelecionada.nome}. Confira.</small>
-            )}
-            {erros.origem && <small className="erro-campo">{erros.origem}</small>}
-          </fieldset>
+                </Campo>
 
-          <div className="grade-campos">
-            <Campo rotulo="Quantidade" htmlFor="quantidade" obrigatorio erro={erros.quantidade}>
-              <input
-                id="quantidade"
-                inputMode="decimal"
-                value={quantidade}
-                onChange={(e) => {
-                  setQuantidade(e.target.value)
-                  marcar('quantidade')
-                }}
-                aria-invalid={!!erros.quantidade || undefined}
-              />
-            </Campo>
-            <Campo
-              rotulo="Valor unitário (R$)"
-              htmlFor="valor"
-              erro={erros.valor}
-              ajuda={total !== null ? `Total: ${formatarMoeda(total)}` : 'Opcional'}
-            >
-              <input
-                id="valor"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={valorUnitario}
-                onChange={(e) => {
-                  setValorUnitario(e.target.value)
-                  marcar('valor')
-                }}
-                aria-invalid={!!erros.valor || undefined}
-              />
-            </Campo>
+                {item.produto && (
+                  <Campo rotulo="Marca" htmlFor={`marca-${item.chave}`} obrigatorio erro={erros[k('marca')]}>
+                    {item.carregandoMarcas ? (
+                      <Carregando texto="Carregando marcas…" />
+                    ) : item.marcas.length === 0 ? (
+                      <div className="alerta alerta-info">
+                        Este produto ainda não tem marcas cadastradas.{' '}
+                        <button
+                          type="button"
+                          className="botao-link"
+                          onClick={() => setModalProduto({ aberto: true, chave: item.chave, id: item.produto!.id, texto: '' })}
+                        >
+                          Adicionar marca ao produto
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="linha-campo">
+                        <select
+                          id={`marca-${item.chave}`}
+                          value={item.marcaId ?? ''}
+                          aria-invalid={!!erros[k('marca')] || undefined}
+                          onChange={(e) => escolherMarca(item.chave, e.target.value ? Number(e.target.value) : null, item.marcas)}
+                        >
+                          <option value="">Selecione a marca…</option>
+                          {item.marcas.map((m) => (
+                            <option key={m.marca_id} value={m.marca_id}>
+                              {m.nome}
+                              {m.referencia ? ` (ref. ${m.referencia})` : ''}
+                              {m.ativo ? '' : ' — inativa'}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="botao botao-secundario botao-pequeno"
+                          onClick={() => setModalProduto({ aberto: true, chave: item.chave, id: item.produto!.id, texto: '' })}
+                        >
+                          Outra marca…
+                        </button>
+                      </div>
+                    )}
+                  </Campo>
+                )}
+
+                <fieldset className="grupo-interno">
+                  <legend>
+                    Origem do produto <span className="obrigatorio">*</span>
+                  </legend>
+                  <div className="opcoes-linha" role="radiogroup" aria-label={`Origem do produto ${sufixo}`}>
+                    {ORIGENS.map((o) => (
+                      <label key={o.valor} className={item.origem === o.valor ? 'opcao-pilula selecionada' : 'opcao-pilula'}>
+                        <input
+                          type="radio"
+                          name={`origem-${item.chave}`}
+                          value={o.valor}
+                          checked={item.origem === o.valor}
+                          onChange={() => alterarItem(item.chave, { origem: o.valor, origemSugerida: false }, 'origem')}
+                        />
+                        {o.rotulo}
+                      </label>
+                    ))}
+                  </div>
+                  {item.origemSugerida && marcaSelecionada && (
+                    <small className="ajuda">Preenchido pelo cadastro da marca {marcaSelecionada.nome}. Confira.</small>
+                  )}
+                  {erros[k('origem')] && <small className="erro-campo">{erros[k('origem')]}</small>}
+                </fieldset>
+
+                <div className="grade-campos">
+                  <Campo rotulo="Quantidade" htmlFor={`quantidade-${item.chave}`} obrigatorio erro={erros[k('quantidade')]}>
+                    <input
+                      id={`quantidade-${item.chave}`}
+                      inputMode="decimal"
+                      value={item.quantidade}
+                      onChange={(e) => alterarItem(item.chave, { quantidade: e.target.value }, 'quantidade')}
+                      aria-invalid={!!erros[k('quantidade')] || undefined}
+                    />
+                  </Campo>
+                  <Campo
+                    rotulo="Valor unitário (R$)"
+                    htmlFor={`valor-${item.chave}`}
+                    erro={erros[k('valor')]}
+                    ajuda={totalItem !== null ? `Subtotal: ${formatarMoeda(totalItem)}` : 'Opcional'}
+                  >
+                    <input
+                      id={`valor-${item.chave}`}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={item.valor}
+                      onChange={(e) => alterarItem(item.chave, { valor: e.target.value }, 'valor')}
+                      aria-invalid={!!erros[k('valor')] || undefined}
+                    />
+                  </Campo>
+                </div>
+              </div>
+            )
+          })}
+
+          <div className="item-garantia-rodape">
+            <button type="button" className="botao botao-secundario" onClick={adicionarItem} disabled={itens.length >= MAXIMO_ITENS}>
+              + Adicionar produto
+            </button>
+            {totalGeral !== null && (
+              <span className="total-garantia">
+                Total da garantia: <strong>{formatarMoeda(totalGeral)}</strong>
+              </span>
+            )}
           </div>
         </fieldset>
 
@@ -648,18 +750,18 @@ export function GarantiaForm() {
         aberto={modalProduto.aberto}
         produtoId={modalProduto.id}
         textoInicial={modalProduto.texto}
-        aoFechar={() => setModalProduto({ aberto: false, id: null, texto: '' })}
+        aoFechar={() => setModalProduto({ aberto: false, chave: null, id: null, texto: '' })}
         aoSalvar={(p) => {
-          const mesmoProduto = produto?.id === p.id
-          setModalProduto({ aberto: false, id: null, texto: '' })
+          const chave = modalProduto.chave
+          const mesmoProduto = modalProduto.id !== null
+          setModalProduto({ aberto: false, chave: null, id: null, texto: '' })
           avisar('Produto salvo.')
+          if (chave === null) return
           if (mesmoProduto) {
-            setProduto(p)
-            void carregarMarcas(p.id, marcaId).then((lista) => {
-              if (!marcaId && lista.length === 1) escolherMarca(lista[0].marca_id, lista)
-            })
+            alterarItem(chave, { produto: p })
+            void recarregarMarcas(chave, p.id)
           } else {
-            void escolherProduto(p)
+            void escolherProduto(chave, p)
           }
         }}
       />
