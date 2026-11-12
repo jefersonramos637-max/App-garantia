@@ -1,0 +1,61 @@
+# Backup diário e CRIPTOGRAFADO do banco de dados (fica 30 dias em "Actions" > execução > "Artifacts").
+# Só funciona depois de cadastrar os segredos SUPABASE_DB_URL e BACKUP_SENHA (veja o README).
+name: Backup diário
+
+on:
+  schedule:
+    - cron: '23 6 * * *' # todos os dias às 03:23 (horário de Brasília)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_SENHA: ${{ secrets.BACKUP_SENHA }}
+    steps:
+      - name: Verificar configuração
+        id: config
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_SENHA" ]; then
+            echo "::warning::Backup NÃO configurado. Cadastre os segredos SUPABASE_DB_URL e BACKUP_SENHA (veja o README)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Exportar dados
+        if: steps.config.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          npx --yes supabase@2.122.0 db dump --db-url "$SUPABASE_DB_URL" --data-only --use-copy --schema public,auth -f backup/dados.sql
+          npx --yes supabase@2.122.0 db dump --db-url "$SUPABASE_DB_URL" --schema public -f backup/estrutura.sql
+          grep -q '^COPY "public"."garantias"' backup/dados.sql
+
+      - name: Criptografar
+        if: steps.config.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          DATA=$(TZ=America/Sao_Paulo date +%Y-%m-%d)
+          ARQUIVO="backup-garantias-$DATA.tar.gz.gpg"
+          tar -czf - -C backup . | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 -o "$ARQUIVO" 3<<<"$BACKUP_SENHA"
+          rm -rf backup
+          echo "ARQUIVO=$ARQUIVO" >> "$GITHUB_ENV"
+
+      - name: Guardar backup
+        if: steps.config.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARQUIVO }}
+          path: ${{ env.ARQUIVO }}
+          retention-days: 30
+          if-no-files-found: error

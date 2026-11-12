@@ -1,0 +1,59 @@
+name: Verificação
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verificacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codigo:
+    name: Código (tipos, lint, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build de produção
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://exemplo.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_exemplo
+
+  banco-e-navegador:
+    name: Segurança do banco e testes no navegador
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Iniciar Supabase local
+        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - name: Testes de segurança do banco (pgTAP)
+        run: npx supabase test db
+      - name: Instalar navegador
+        run: npx playwright install --with-deps chromium
+      - name: Testes de ponta a ponta
+        run: npx playwright test --trace off
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: resultado-testes
+          path: test-results
+          retention-days: 7
