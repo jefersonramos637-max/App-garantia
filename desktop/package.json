@@ -8,10 +8,10 @@
   "private": true,
   "main": "main.cjs",
   "scripts": {
-    "configurar": "node scripts/configurar.cjs",
-    "iniciar": "npm run configurar && electron .",
-    "pacote:windows": "npm run configurar && electron-builder --win nsis --x64 --publish never",
-    "pacote:linux-teste": "npm run configurar && electron-builder --linux dir --publish never"
+    "preparar": "node scripts/preparar.cjs",
+    "iniciar": "npm run preparar && electron .",
+    "pacote:windows": "npm run preparar && electron-builder --win nsis --x64 --publish never",
+    "pacote:linux-teste": "npm run preparar && electron-builder --linux dir --publish never"
   },
   "build": {
     "appId": "br.com.lojaodostratores.garantias",
@@ -22,10 +22,10 @@
     },
     "files": [
       "main.cjs",
-      "sem-conexao.html",
-      "endereco.json",
+      "configuracao.json",
       "icone.png",
-      "package.json"
+      "package.json",
+      "web/**/*"
     ],
     "electronFuses": {
       "runAsNode": false,
@@ -45,7 +45,7 @@
         }
       ],
       "icon": "icone.png",
-      "artifactName": "Garantias-Instalador-${version}.${ext}"
+      "artifactName": "Garantias-Instalador.${ext}"
     },
     "nsis": {
       "oneClick": true,
@@ -63,10 +63,25 @@
       "target": "dir",
       "icon": "icone.png",
       "category": "Office"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jefersonramos637-max",
+        "repo": "App-garantia",
+        "releaseType": "release"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "45.1.0",
     "electron-builder": "26.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jefersonramos637-max/App-garantia.git"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.12"
   }
 }

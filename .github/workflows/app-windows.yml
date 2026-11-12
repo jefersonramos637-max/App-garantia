@@ -1,82 +1,144 @@
-# Gera o instalador do aplicativo para Windows (.exe) num computador Windows do GitHub.
+# Gera, TESTA e publica o instalador para Windows (.exe).
 #
-# Como usar:
-#   1) Settings > Secrets and variables > Actions > aba "Variables" > New repository variable
-#      Nome: URL_DO_APLICATIVO   Valor: o endereço do site (ex.: https://garantias.pages.dev)
-#   2) Actions > "App para Windows (.exe)" > Run workflow
-#   3) Baixe o instalador em "Releases" (ou em "Artifacts" da execução).
+# Roda sozinho depois que a "Verificação" passa no ramo principal. Se algo do programa
+# mudou desde a última versão, publica uma versão nova em Releases — e os programas já
+# instalados se atualizam sozinhos. Também pode ser disparado em Actions > Run workflow.
+#
+# Enquanto o arquivo .env.production não estiver preenchido, gera apenas um instalador
+# de TESTE (não publicado).
 name: App para Windows (.exe)
 
 on:
+  workflow_run:
+    workflows: [Verificação]
+    types: [completed]
   workflow_dispatch:
-  push:
-    paths:
-      - 'desktop/**'
-      - '.github/workflows/app-windows.yml'
 
 permissions:
   contents: write
 
 concurrency:
-  group: app-windows-${{ github.ref }}
-  cancel-in-progress: true
+  group: app-windows
+  cancel-in-progress: false
 
 jobs:
   windows:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == github.event.repository.default_branch)
     runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      URL_DO_APLICATIVO: ${{ vars.URL_DO_APLICATIVO }}
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
-        working-directory: desktop
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+
+      - name: Verificar configuração e mudanças
+        id: cfg
+        run: |
+          url=$(grep -E '^VITE_SUPABASE_URL=' .env.production | cut -d= -f2- | tr -d '\r" ')
+          chave=$(grep -E '^VITE_SUPABASE_ANON_KEY=' .env.production | cut -d= -f2- | tr -d '\r" ')
+          if [ -n "$url" ] && [ -n "$chave" ]; then
+            echo "configurado=true" >> "$GITHUB_OUTPUT"
+            echo "SUPABASE_URL=$url" >> "$GITHUB_ENV"
+            echo "SUPABASE_CHAVE=$chave" >> "$GITHUB_ENV"
+          else
+            echo "configurado=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::.env.production ainda não foi preenchido: será gerado apenas um instalador de TESTE (não publicado)."
+          fi
+          ultima=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$ultima" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             ! git diff --quiet "$ultima" HEAD -- src public desktop index.html vite.config.ts package.json package-lock.json .env.production; then
+            echo "mudou=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mudou=false" >> "$GITHUB_OUTPUT"
+            echo "Nada mudou no programa desde $ultima: nenhuma versão nova será publicada."
+          fi
+          echo "SHA_ALVO=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Instalar dependências
+        if: steps.cfg.outputs.mudou == 'true'
         run: |
+          npm ci
+          cd desktop
           npm ci
           node node_modules/electron/install.js
 
-      - name: Definir endereço do sistema
+      - name: Definir versão
+        if: steps.cfg.outputs.mudou == 'true'
         run: |
-          if [ -z "$URL_DO_APLICATIVO" ]; then
-            echo "::warning::A variável URL_DO_APLICATIVO não foi cadastrada. Será gerado apenas um instalador de TESTE (não use na empresa)."
-            echo "URL_DO_APLICATIVO=https://exemplo.invalid" >> "$GITHUB_ENV"
-            echo "INSTALADOR_TESTE=1" >> "$GITHUB_ENV"
-          fi
+          versao="1.0.${GITHUB_RUN_NUMBER}"
+          cd desktop && npm version "$versao" --no-git-tag-version --allow-same-version
+          echo "VERSAO=$versao" >> "$GITHUB_ENV"
 
       - name: Gerar instalador
-        run: npm run pacote:windows
-
-      - name: Conferir instalador
+        if: steps.cfg.outputs.mudou == 'true'
         run: |
-          ls -la saida/*.exe
-          tamanho=$(stat -c %s saida/*.exe)
-          test "$tamanho" -gt 30000000
+          if [ "${{ steps.cfg.outputs.configurado }}" != "true" ]; then
+            export VITE_SUPABASE_URL=https://exemplo.invalid
+            export VITE_SUPABASE_ANON_KEY=sb_publishable_teste
+          fi
+          cd desktop && npm run pacote:windows
+
+      - name: Testar o programa gerado
+        if: steps.cfg.outputs.mudou == 'true'
+        run: |
+          if [ "${{ steps.cfg.outputs.configurado }}" = "true" ]; then
+            node scripts/testar-programa.mjs desktop/saida/win-unpacked/Garantias.exe "$SUPABASE_URL" "$SUPABASE_CHAVE"
+          else
+            node scripts/testar-programa.mjs desktop/saida/win-unpacked/Garantias.exe
+          fi
+
+      - name: Conferir arquivos
+        if: steps.cfg.outputs.mudou == 'true'
+        run: |
+          ls -la desktop/saida
+          test -f desktop/saida/Garantias-Instalador.exe
+          test -f desktop/saida/Garantias-Instalador.exe.blockmap
+          test -f desktop/saida/latest.yml
+          test "$(stat -c %s desktop/saida/Garantias-Instalador.exe)" -gt 30000000
+          cat desktop/saida/latest.yml
 
       - name: Guardar instalador
+        if: steps.cfg.outputs.mudou == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.INSTALADOR_TESTE == '1' && 'Instalador-TESTE-nao-usar' || 'Garantias-Instalador-Windows' }}
-          path: desktop/saida/*.exe
+          name: ${{ steps.cfg.outputs.configurado == 'true' && 'Garantias-Instalador-Windows' || 'Instalador-TESTE-nao-usar' }}
+          path: desktop/saida/Garantias-Instalador.exe
           retention-days: 30
           if-no-files-found: error
 
-      - name: Publicar em Releases
-        if: env.INSTALADOR_TESTE != '1' && github.event_name == 'workflow_dispatch'
+      - name: Publicar versão
+        if: steps.cfg.outputs.mudou == 'true' && steps.cfg.outputs.configurado == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          versao=$(node -p "require('./package.json').version")
-          tag="windows-v${versao}-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" saida/*.exe \
-            --title "Garantias para Windows ${versao} (versão ${GITHUB_RUN_NUMBER})" \
-            --notes "Instalador do aplicativo de garantias para Windows. Abre o sistema em: ${URL_DO_APLICATIVO}" \
-            --target "$GITHUB_SHA"
+          cat > notas.md <<NOTAS
+          **Instalar:** baixe \`Garantias-Instalador.exe\` abaixo e dê dois cliques.
+          Não precisa ser administrador do Windows. Se aparecer "O Windows protegeu o computador",
+          clique em **Mais informações → Executar assim mesmo**.
+
+          Quem já tem o programa instalado recebe esta versão automaticamente.
+          NOTAS
+          gh release create "v${VERSAO}" \
+            desktop/saida/Garantias-Instalador.exe \
+            desktop/saida/Garantias-Instalador.exe.blockmap \
+            desktop/saida/latest.yml \
+            --title "Garantias ${VERSAO}" \
+            --notes-file notas.md \
+            --target "$SHA_ALVO" \
+            --latest

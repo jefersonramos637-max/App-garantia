@@ -1,61 +1,101 @@
 'use strict'
 // Aplicativo de Garantias para computador (Windows).
-// É uma janela segura que abre o sistema publicado na internet: assim todos os
-// computadores recebem as atualizações automaticamente, sem reinstalar.
+//
+// O sistema (telas) vai embutido no programa e é servido pelo endereço interno
+// app://garantias/. Os dados ficam no Supabase (internet). O programa se atualiza
+// sozinho a partir das versões publicadas no GitHub (Releases).
 
-const { app, BrowserWindow, Menu, dialog, session, shell } = require('electron')
+const { app, BrowserWindow, Menu, dialog, protocol, session, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
 
 const ID_APP = 'br.com.lojaodostratores.garantias'
 const PARTICAO = 'persist:garantias'
+const ESQUEMA = 'app'
+const HOST = 'garantias'
+const INICIO = `${ESQUEMA}://${HOST}/`
 const PERMISSOES_LIBERADAS = new Set(['clipboard-sanitized-write', 'fullscreen'])
 
-/** Endereço do sistema, gravado no momento de gerar o instalador (endereco.json). */
-function lerEndereco() {
-  let url
-  // Somente em desenvolvimento/testes (nunca no instalador) o endereço pode vir do ambiente.
-  if (!app.isPackaged && process.env.GARANTIAS_URL_TESTE) {
-    url = process.env.GARANTIAS_URL_TESTE
-  } else {
-    url = JSON.parse(fs.readFileSync(path.join(__dirname, 'endereco.json'), 'utf8')).url
-  }
-  const endereco = new URL(url)
-  const local = endereco.hostname === 'localhost' || endereco.hostname === '127.0.0.1'
-  if (endereco.protocol !== 'https:' && !(local && endereco.protocol === 'http:')) {
-    throw new Error('O endereço do aplicativo precisa começar com https://')
-  }
-  return endereco
+// Modo de testes automáticos (nunca no instalador): pasta de dados temporária e links externos registrados.
+const MODO_TESTE = !app.isPackaged && process.env.GARANTIAS_TESTE === '1'
+
+const TIPOS = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.txt': 'text/plain; charset=utf-8',
+  '.woff2': 'font/woff2',
 }
 
-let ENDERECO
+// O endereço interno precisa ser registrado antes de o aplicativo iniciar.
+protocol.registerSchemesAsPrivileged([
+  { scheme: ESQUEMA, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+])
+
+/** Pasta com as telas do sistema e endereço do Supabase (gravados ao gerar o instalador). */
+function lerConfiguracao() {
+  const pastaWeb = path.join(__dirname, 'web')
+  const supabaseUrl = JSON.parse(fs.readFileSync(path.join(__dirname, 'configuracao.json'), 'utf8')).supabaseUrl
+  const supabase = new URL(supabaseUrl)
+  const local = supabase.hostname === 'localhost' || supabase.hostname === '127.0.0.1'
+  if (supabase.protocol !== 'https:' && !(local && supabase.protocol === 'http:')) {
+    throw new Error('O endereço do Supabase precisa começar com https://')
+  }
+  if (!fs.existsSync(path.join(pastaWeb, 'index.html'))) {
+    throw new Error('As telas do sistema não foram encontradas no programa.')
+  }
+  return { pastaWeb: path.resolve(pastaWeb), supabase }
+}
+
+let CONFIG
 try {
-  ENDERECO = lerEndereco()
+  CONFIG = lerConfiguracao()
 } catch (erro) {
   app.whenReady().then(() => {
-    dialog.showErrorBox('Garantias', `Instalador configurado incorretamente.\n\n${erro.message}`)
+    dialog.showErrorBox('Garantias', `O programa foi gerado com uma configuração inválida.\n\n${erro.message}`)
     app.quit()
   })
 }
 
-const ORIGEM = ENDERECO ? ENDERECO.origin : null
-let janela = null
+/** Política de segurança: só carrega o próprio programa e só conversa com o Supabase configurado. */
+function politicaDeSeguranca() {
+  const origem = CONFIG.supabase.origin
+  const ws = `${CONFIG.supabase.protocol === 'https:' ? 'wss' : 'ws'}://${CONFIG.supabase.host}`
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    `img-src 'self' data: blob: ${origem}`,
+    `connect-src 'self' ${origem} ${ws}`,
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "worker-src 'self' blob:",
+  ].join('; ')
+}
 
-// Nos testes automáticos os links externos são apenas registrados (não abre o navegador).
-const MODO_TESTE = !app.isPackaged && Boolean(process.env.GARANTIAS_URL_TESTE)
-const linksExternosNoTeste = []
-if (MODO_TESTE) globalThis.__linksExternosNoTeste = linksExternosNoTeste
-
-function doSistema(url) {
+function ehDoPrograma(url) {
   try {
-    return new URL(url).origin === ORIGEM
+    const u = new URL(url)
+    return u.protocol === `${ESQUEMA}:` && u.host === HOST
   } catch {
     return false
   }
 }
 
-/** Links para fora do sistema (ex.: fotos e PDFs anexados) abrem no navegador padrão. */
+// Nos testes automáticos os links externos são apenas registrados (não abre o navegador).
+const linksExternosNoTeste = []
+if (MODO_TESTE) globalThis.__linksExternosNoTeste = linksExternosNoTeste
+
+/** Links para fora do programa (ex.: fotos e PDFs anexados) abrem no navegador padrão. */
 function abrirNoNavegador(url) {
   try {
     const u = new URL(url)
@@ -67,10 +107,59 @@ function abrirNoNavegador(url) {
   }
 }
 
-function mostrarSemConexao() {
-  if (!janela || janela.isDestroyed()) return
-  void janela.loadFile(path.join(__dirname, 'sem-conexao.html'), { query: { destino: ENDERECO.href } })
+/** Entrega os arquivos das telas (com volta para index.html nas rotas do sistema). */
+function registrarEnderecoInterno(sessao) {
+  const csp = politicaDeSeguranca()
+  const pasta = CONFIG.pastaWeb
+  sessao.protocol.handle(ESQUEMA, async (requisicao) => {
+    const u = new URL(requisicao.url)
+    if (u.host !== HOST || requisicao.method !== 'GET') return new Response('Não permitido', { status: 403 })
+
+    let relativo
+    try {
+      relativo = decodeURIComponent(u.pathname)
+    } catch {
+      return new Response('Endereço inválido', { status: 400 })
+    }
+    let arquivo = path.normalize(path.join(pasta, relativo))
+    if (arquivo !== pasta && !arquivo.startsWith(pasta + path.sep)) {
+      return new Response('Não permitido', { status: 403 })
+    }
+
+    let ehArquivo = false
+    try {
+      ehArquivo = fs.statSync(arquivo).isFile()
+    } catch {
+      ehArquivo = false
+    }
+    if (!ehArquivo) {
+      // Rotas do sistema (ex.: /garantias/12) abrem o index.html; arquivos inexistentes dão 404.
+      if (path.extname(relativo)) return new Response('Não encontrado', { status: 404 })
+      arquivo = path.join(pasta, 'index.html')
+    }
+
+    const conteudo = await fs.promises.readFile(arquivo)
+    return new Response(conteudo, {
+      status: 200,
+      headers: {
+        'Content-Type': TIPOS[path.extname(arquivo).toLowerCase()] || 'application/octet-stream',
+        'Content-Security-Policy': csp,
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer',
+        'Cache-Control': 'no-cache',
+      },
+    })
+  })
 }
+
+function protegerSessao(sessao) {
+  sessao.setPermissionRequestHandler((_wc, permissao, responder, detalhes) => {
+    responder(PERMISSOES_LIBERADAS.has(permissao) && ehDoPrograma(detalhes.requestingUrl))
+  })
+  sessao.setPermissionCheckHandler((_wc, permissao, origem) => PERMISSOES_LIBERADAS.has(permissao) && ehDoPrograma(origem))
+}
+
+let janela = null
 
 function criarJanela() {
   janela = new BrowserWindow({
@@ -102,38 +191,33 @@ function criarJanela() {
 
   const wc = janela.webContents
 
-  // Nada de novas janelas: o que for do sistema abre na própria janela; o resto, no navegador.
+  // Nada de novas janelas: o que é do programa abre na própria janela; o resto, no navegador.
   wc.setWindowOpenHandler(({ url }) => {
-    if (doSistema(url)) void janela.loadURL(url)
+    if (ehDoPrograma(url)) void janela.loadURL(url)
     else abrirNoNavegador(url)
     return { action: 'deny' }
   })
 
-  // Impede que a janela navegue para qualquer outro site.
+  // Impede que a janela navegue para qualquer site.
   wc.on('will-navigate', (evento, url) => {
-    if (!doSistema(url)) {
+    if (!ehDoPrograma(url)) {
       evento.preventDefault()
       abrirNoNavegador(url)
     }
   })
   wc.on('will-redirect', (evento, url) => {
-    if (!doSistema(url)) evento.preventDefault()
-  })
-
-  // Sem internet ou servidor fora do ar: tela amigável com "Tentar novamente".
-  wc.on('did-fail-load', (_evento, codigo, _descricao, url, ehPrincipal) => {
-    if (ehPrincipal && codigo !== -3 && doSistema(url)) mostrarSemConexao()
+    if (!ehDoPrograma(url)) evento.preventDefault()
   })
 
   wc.on('render-process-gone', () => {
-    if (!janela.isDestroyed()) void janela.loadURL(ENDERECO.href)
+    if (!janela.isDestroyed()) void janela.loadURL(INICIO)
   })
 
   janela.on('closed', () => {
     janela = null
   })
 
-  void janela.loadURL(ENDERECO.href)
+  void janela.loadURL(INICIO)
 }
 
 function criarMenu() {
@@ -141,9 +225,11 @@ function criarMenu() {
     {
       label: 'Aplicativo',
       submenu: [
-        { label: 'Página inicial', accelerator: 'Alt+Home', click: () => janela && void janela.loadURL(ENDERECO.href) },
+        { label: 'Página inicial', accelerator: 'Alt+Home', click: () => janela && void janela.loadURL(INICIO) },
         { label: 'Recarregar', accelerator: 'CmdOrCtrl+R', click: () => janela && janela.webContents.reload() },
         { label: 'Voltar', accelerator: 'Alt+Left', click: () => janela && janela.webContents.navigationHistory.goBack() },
+        { type: 'separator' },
+        { label: 'Procurar atualização', click: () => verificarAtualizacao(true) },
         { type: 'separator' },
         { label: 'Sair', accelerator: 'Alt+F4', role: 'quit' },
       ],
@@ -168,7 +254,7 @@ function criarMenu() {
               type: 'info',
               title: 'Sobre',
               message: 'Garantias — Lojão dos Tratores / LL Tratores',
-              detail: `Versão ${app.getVersion()}\nServidor: ${ORIGEM}`,
+              detail: `Versão ${app.getVersion()}\nServidor de dados: ${CONFIG.supabase.host}`,
             }),
         },
       ],
@@ -177,19 +263,79 @@ function criarMenu() {
   Menu.setApplicationMenu(menu)
 }
 
-function protegerSessao() {
-  const sessao = session.fromPartition(PARTICAO)
-  sessao.setPermissionRequestHandler((_wc, permissao, responder, detalhes) => {
-    responder(PERMISSOES_LIBERADAS.has(permissao) && doSistema(detalhes.requestingUrl))
+// ---------------------------------------------------------------------------
+// Atualização automática (somente no programa instalado no Windows)
+// ---------------------------------------------------------------------------
+let atualizador = null
+let avisarSemAtualizacao = false
+
+function configurarAtualizacao() {
+  if (!app.isPackaged || process.platform !== 'win32') return
+  try {
+    atualizador = require('electron-updater').autoUpdater
+  } catch {
+    return
+  }
+  atualizador.autoDownload = true
+  atualizador.autoInstallOnAppQuit = true
+
+  atualizador.on('update-downloaded', async (info) => {
+    const { response } = await dialog.showMessageBox(janela, {
+      type: 'info',
+      buttons: ['Reiniciar agora', 'Depois'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Atualização pronta',
+      message: `A versão ${info.version} do Garantias foi baixada.`,
+      detail: 'Clique em "Reiniciar agora" para usar a nova versão. Se preferir, ela será instalada quando você fechar o programa.',
+    })
+    if (response === 0) atualizador.quitAndInstall()
   })
-  sessao.setPermissionCheckHandler((_wc, permissao, origem) => PERMISSOES_LIBERADAS.has(permissao) && origem === ORIGEM)
+  atualizador.on('update-not-available', () => {
+    if (avisarSemAtualizacao) {
+      avisarSemAtualizacao = false
+      void dialog.showMessageBox(janela, { type: 'info', title: 'Atualização', message: 'Você já está usando a versão mais recente.' })
+    }
+  })
+  atualizador.on('error', (erro) => {
+    console.warn('Atualização automática:', erro && erro.message)
+    if (avisarSemAtualizacao) {
+      avisarSemAtualizacao = false
+      void dialog.showMessageBox(janela, {
+        type: 'warning',
+        title: 'Atualização',
+        message: 'Não foi possível procurar atualizações agora. Verifique a internet e tente mais tarde.',
+      })
+    }
+  })
+
+  verificarAtualizacao(false)
+  setInterval(() => verificarAtualizacao(false), 4 * 60 * 60 * 1000)
 }
 
-if (ENDERECO) {
-  // Testes automáticos usam uma pasta de dados própria a cada execução.
-  if (!app.isPackaged && process.env.GARANTIAS_URL_TESTE) {
-    app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'garantias-teste-')))
+function verificarAtualizacao(manual) {
+  if (!atualizador) {
+    if (manual) {
+      void dialog.showMessageBox(janela, {
+        type: 'info',
+        title: 'Atualização',
+        message: 'A atualização automática funciona no programa instalado no Windows.',
+      })
+    }
+    return
   }
+  avisarSemAtualizacao = manual
+  atualizador.checkForUpdates().catch(() => {
+    /* tratado no evento "error" */
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Início
+// ---------------------------------------------------------------------------
+if (CONFIG) {
+  // Testes automáticos usam uma pasta de dados própria a cada execução.
+  if (MODO_TESTE) app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'garantias-teste-')))
   app.setAppUserModelId(ID_APP)
   // Isolamento máximo de todas as telas. (A opção --no-sandbox só é usada nos testes
   // automáticos em Linux; o instalador do Windows nunca a utiliza.)
@@ -205,15 +351,18 @@ if (ENDERECO) {
       }
     })
 
-    // Nenhuma janela pode embutir <webview> nem abrir outras janelas.
+    // Nenhuma janela pode embutir <webview>.
     app.on('web-contents-created', (_evento, conteudo) => {
       conteudo.on('will-attach-webview', (e) => e.preventDefault())
     })
 
     app.whenReady().then(() => {
-      protegerSessao()
+      const sessao = session.fromPartition(PARTICAO)
+      registrarEnderecoInterno(sessao)
+      protegerSessao(sessao)
       criarMenu()
       criarJanela()
+      configurarAtualizacao()
     })
 
     app.on('window-all-closed', () => app.quit())

@@ -18,10 +18,19 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .env.production
+          sparse-checkout-cone-mode: false
       - name: Enviar sinal de atividade
         run: |
+          # Usa os segredos, se cadastrados; senão, a configuração pública de .env.production.
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::Cadastre os segredos SUPABASE_URL e SUPABASE_ANON_KEY (veja o README)."
+            SUPABASE_URL=$(grep -E '^VITE_SUPABASE_URL=' .env.production | cut -d= -f2- | tr -d '\r" ')
+            SUPABASE_ANON_KEY=$(grep -E '^VITE_SUPABASE_ANON_KEY=' .env.production | cut -d= -f2- | tr -d '\r" ')
+          fi
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::Supabase ainda não configurado (.env.production vazio)."
             exit 0
           fi
           resposta=$(curl -sS --fail-with-body --max-time 30 -X POST "${SUPABASE_URL%/}/rest/v1/rpc/ping" \

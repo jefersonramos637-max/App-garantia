@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(63);
+select plan(65);
 
 -- ---------------------------------------------------------------------------
 -- Preparação: usuários de teste (o gatilho cria o perfil automaticamente)
@@ -258,6 +258,17 @@ select is(
   (select count(*)::int from auth.sessions where user_id = '00000000-0000-0000-0000-00000000000c'),
   0, 'bloquear usuário encerra as sessões dele'
 );
+
+-- ---------------------------------------------------------------------------
+-- Integrações no servidor (chave secreta / service_role) conseguem cadastrar
+-- ---------------------------------------------------------------------------
+set local role service_role;
+select lives_ok(
+  $$insert into clientes (codigo, nome) values ('SRV-1', '  Cliente   via integração ')$$,
+  'service_role: integração cadastra cliente (gatilhos funcionam)'
+);
+select is((select nome from clientes where codigo = 'SRV-1'), 'Cliente via integração', 'service_role: texto limpo pelo gatilho');
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Verificação em duas etapas (2FA): quem ativou precisa do código (aal2)

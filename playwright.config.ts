@@ -17,7 +17,11 @@ export default defineConfig({
     trace: 'off',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'sistema', testMatch: /fluxo-completo\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    // O programa para computador é testado depois (usa dados criados pelos testes do sistema).
+    { name: 'computador', testMatch: /desktop\.spec\.ts/, dependencies: ['sistema'] },
+  ],
   webServer: {
     command: 'node scripts/servidor-teste.mjs',
     url: 'http://127.0.0.1:4173',

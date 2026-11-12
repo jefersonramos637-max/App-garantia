@@ -22,7 +22,8 @@ create extension if not exists pgcrypto with schema extensions;
 -- Esquema interno: funções auxiliares que NÃO ficam expostas na API.
 create schema if not exists privado;
 revoke all on schema privado from public;
-grant usage on schema privado to authenticated;
+-- service_role: integrações no servidor (ex.: ERP) usando a chave secreta, que nunca vai ao app.
+grant usage on schema privado to authenticated, service_role;
 
 -- Remove acentos e coloca em minúsculas (usado para busca e para evitar duplicidade).
 create or replace function privado.normalizar(texto text)
@@ -974,9 +975,9 @@ alter default privileges for role postgres in schema public revoke all on functi
 
 -- Funções internas: somente usuários logados (e nunca pela API, pois o esquema não é exposto).
 revoke all on all functions in schema privado from public, anon, authenticated;
-grant execute on function privado.normalizar(text) to authenticated;
-grant execute on function privado.limpar(text) to authenticated;
-grant execute on function privado.hoje() to authenticated;
+grant execute on function privado.normalizar(text) to authenticated, service_role;
+grant execute on function privado.limpar(text) to authenticated, service_role;
+grant execute on function privado.hoje() to authenticated, service_role;
 grant execute on function privado.meu_papel() to authenticated;
 grant execute on function privado.tem_acesso() to authenticated;
 grant execute on function privado.pode_editar() to authenticated;
