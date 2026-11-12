@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { rotuloPapel } from '../lib/constantes'
+import {
+  IconeClientes,
+  IconeConfiguracoes,
+  IconeGarantias,
+  IconePainel,
+  IconeProdutos,
+  IconeSair,
+} from './Icones'
+
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) return '?'
+  return ((partes[0][0] ?? '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase()
+}
 
 export function Layout() {
-  const { perfil, ehAdmin, podeEditar, sair } = useAuth()
+  const { perfil, podeEditar, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
   const local = useLocation()
 
@@ -13,6 +27,7 @@ export function Layout() {
   }, [local.pathname])
 
   const link = ({ isActive }: { isActive: boolean }) => (isActive ? 'nav-link ativo' : 'nav-link')
+  const nome = perfil?.nome || perfil?.email || ''
 
   return (
     <div className={menuAberto ? 'layout menu-aberto' : 'layout'}>
@@ -27,59 +42,61 @@ export function Layout() {
         >
           <span aria-hidden="true">☰</span>
         </button>
+        <img src="/icone.svg" alt="" width="26" height="26" />
         <span className="marca-app">Garantias</span>
       </header>
 
       <aside className="menu-lateral" id="menu-lateral">
         <div className="menu-marca">
-          <strong>Garantias</strong>
-          <small>Lojão dos Tratores · LL Tratores</small>
+          <img src="/icone.svg" alt="" width="34" height="34" />
+          <div>
+            <strong>Garantias</strong>
+            <small>Lojão dos Tratores · LL Tratores</small>
+          </div>
         </div>
-        <nav aria-label="Menu principal">
+
+        {podeEditar && (
+          <Link to="/garantias/nova" className="botao botao-bloco botao-nova">
+            + Nova garantia
+          </Link>
+        )}
+
+        <nav aria-label="Menu principal" className="menu-nav">
           <NavLink to="/" end className={link}>
+            <IconePainel />
             Painel
           </NavLink>
           <NavLink to="/garantias" end className={link}>
+            <IconeGarantias />
             Garantias
           </NavLink>
-          {podeEditar && (
-            <NavLink to="/garantias/nova" className={link}>
-              + Nova garantia
-            </NavLink>
-          )}
-          <span className="nav-secao">Cadastros</span>
           <NavLink to="/clientes" className={link}>
+            <IconeClientes />
             Clientes
           </NavLink>
           <NavLink to="/produtos" className={link}>
+            <IconeProdutos />
             Produtos
           </NavLink>
-          <NavLink to="/marcas" className={link}>
-            Marcas
-          </NavLink>
-          {ehAdmin && (
-            <>
-              <span className="nav-secao">Administração</span>
-              <NavLink to="/importar" className={link}>
-                Importar listas
-              </NavLink>
-              <NavLink to="/usuarios" className={link}>
-                Usuários
-              </NavLink>
-              <NavLink to="/auditoria" className={link}>
-                Auditoria
-              </NavLink>
-            </>
-          )}
         </nav>
-        <div className="menu-usuario">
-          <NavLink to="/minha-conta" className={link}>
-            <span className="usuario-nome">{perfil?.nome || perfil?.email}</span>
-            <small>{rotuloPapel(perfil?.papel)} · Minha conta</small>
+
+        <div className="menu-rodape">
+          <NavLink to="/configuracoes" className={link}>
+            <IconeConfiguracoes />
+            Configurações
           </NavLink>
-          <button type="button" className="botao botao-secundario botao-bloco" onClick={() => void sair()}>
-            Sair
-          </button>
+          <div className="menu-usuario">
+            <span className="avatar" aria-hidden="true">
+              {iniciais(nome)}
+            </span>
+            <div className="menu-usuario-texto">
+              <span className="usuario-nome">{nome}</span>
+              <small>{rotuloPapel(perfil?.papel)}</small>
+            </div>
+            <button type="button" className="botao-icone botao-sair" onClick={() => void sair()} aria-label="Sair" title="Sair">
+              <IconeSair />
+            </button>
+          </div>
         </div>
       </aside>
       <div className="fundo-menu" aria-hidden="true" onClick={() => setMenuAberto(false)} />

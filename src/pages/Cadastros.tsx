@@ -477,7 +477,7 @@ export function Marcas() {
     <div className="pagina">
       <div className="pagina-cabecalho">
         <div>
-          <h1>Marcas</h1>
+          <h2 className="titulo-secao">Marcas</h2>
           <p className="texto-suave">Para incluir uma marca em um produto, edite o produto.</p>
         </div>
       </div>

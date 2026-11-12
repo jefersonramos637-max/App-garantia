@@ -144,7 +144,7 @@ export function Usuarios() {
     <div className="pagina">
       <div className="pagina-cabecalho">
         <div>
-          <h1>Usuários</h1>
+          <h2 className="titulo-secao">Usuários</h2>
           <p className="texto-suave">
             {usuarios?.length ?? 0} usuário(s){pendentes > 0 && <> · <strong>{pendentes} aguardando liberação</strong></>}
           </p>
@@ -433,7 +433,7 @@ export function Auditoria() {
     <div className="pagina">
       <div className="pagina-cabecalho">
         <div>
-          <h1>Auditoria</h1>
+          <h2 className="titulo-secao">Auditoria</h2>
           <p className="texto-suave">Registro permanente de todas as inclusões, alterações e exclusões. Ninguém consegue apagar.</p>
         </div>
       </div>

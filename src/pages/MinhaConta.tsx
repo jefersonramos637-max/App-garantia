@@ -156,7 +156,7 @@ export function MinhaConta() {
     <div className="pagina pagina-formulario">
       <div className="pagina-cabecalho">
         <div>
-          <h1>Minha conta</h1>
+          <h2 className="titulo-secao">Minha conta</h2>
           <p className="texto-suave">
             {perfil?.email} · {rotuloPapel(perfil?.papel)}
           </p>

@@ -12,6 +12,8 @@ import {
   numeroParaCampo,
   padraoBusca,
   textoDias,
+  tempoRelativo,
+  dataPorExtenso,
 } from './formato'
 import { regrasSenha, senhaValida } from './senha'
 import { nomeArquivoSeguro } from './exportar'
@@ -108,5 +110,20 @@ describe('nome de arquivo seguro', () => {
     expect(nomeArquivoSeguro('../../etc/passwd')).toBe('etc-passwd')
     expect(nomeArquivoSeguro('')).toBe('arquivo')
     expect(/^[A-Za-z0-9._-]+$/.test(nomeArquivoSeguro('çãõ <script>.pdf'))).toBe(true)
+  })
+})
+
+describe('tempo relativo', () => {
+  const agora = new Date(2026, 10, 12, 15, 0, 0)
+  it('mostra minutos, horas, ontem e data', () => {
+    expect(tempoRelativo(new Date(2026, 10, 12, 14, 59, 40).toISOString(), agora)).toBe('agora')
+    expect(tempoRelativo(new Date(2026, 10, 12, 14, 55).toISOString(), agora)).toBe('há 5 min')
+    expect(tempoRelativo(new Date(2026, 10, 12, 12, 0).toISOString(), agora)).toBe('há 3 h')
+    expect(tempoRelativo(new Date(2026, 10, 11, 9, 0).toISOString(), agora)).toBe('ontem')
+    expect(tempoRelativo(new Date(2026, 10, 1, 9, 0).toISOString(), agora)).toBe('01/11/2026')
+    expect(tempoRelativo(null, agora)).toBe('—')
+  })
+  it('data por extenso com inicial maiúscula', () => {
+    expect(dataPorExtenso(agora)).toBe('Quinta-feira, 12 de novembro')
   })
 })

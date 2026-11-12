@@ -114,3 +114,25 @@ export function textoDias(dias: number | null): string {
   if (dias <= 0) return 'hoje'
   return dias === 1 ? 'há 1 dia' : `há ${dias} dias`
 }
+
+/** "agora", "há 5 min", "há 3 h", "ontem" ou a data (dd/mm/aaaa). */
+export function tempoRelativo(iso: string | null | undefined, agora: Date = new Date()): string {
+  if (!iso) return '—'
+  const data = new Date(iso)
+  if (Number.isNaN(data.getTime())) return '—'
+  const minutos = Math.floor((agora.getTime() - data.getTime()) / 60_000)
+  if (minutos < 1) return 'agora'
+  if (minutos < 60) return `há ${minutos} min`
+  const horas = Math.floor(minutos / 60)
+  if (horas < 24) return `há ${horas} h`
+  const ontem = new Date(agora)
+  ontem.setDate(ontem.getDate() - 1)
+  if (data.toDateString() === ontem.toDateString()) return 'ontem'
+  return formatarData(hojeISO(data))
+}
+
+/** "Quarta-feira, 12 de novembro" */
+export function dataPorExtenso(agora: Date = new Date()): string {
+  const t = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(agora)
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}

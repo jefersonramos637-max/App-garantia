@@ -18,6 +18,12 @@ async function irPeloMenu(page: Page, nome: string) {
   await page.getByRole('navigation', { name: 'Menu principal' }).getByRole('link', { name: nome, exact: true }).click()
 }
 
+async function irParaConfiguracoes(page: Page, aba: string) {
+  await page.getByRole('link', { name: 'Configurações', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Configurações' })).toBeVisible()
+  await page.getByRole('navigation', { name: 'Seções das configurações' }).getByRole('link', { name: aba, exact: true }).click()
+}
+
 test.describe.serial('Aplicativo de garantias', () => {
   test('login recusa senha errada com mensagem em português', async ({ page }) => {
     const problemas = vigiarConsole(page)
@@ -52,7 +58,8 @@ test.describe.serial('Aplicativo de garantias', () => {
   test('administrador importa produtos (Excel) e clientes (CSV do Excel)', async ({ page }) => {
     const problemas = vigiarConsole(page)
     await entrarNoPainel(page, USUARIOS.admin, SENHA_ADMIN)
-    await irPeloMenu(page, 'Importar listas')
+    await irParaConfiguracoes(page, 'Importar planilhas')
+    await expect(page).toHaveURL(/\/configuracoes\/importar$/)
 
     const xlsx = await writeXlsxFile([
       ['RELATÓRIO DE PEÇAS'],
@@ -192,7 +199,9 @@ test.describe.serial('Aplicativo de garantias', () => {
 
     await page.goto('/')
     await expect(page.getByRole('link', { name: /Em andamento\s*1/ })).toBeVisible()
-    await expect(page.getByRole('row', { name: /LL Tratores/ })).toContainText('1')
+    await expect(page.locator('.comparacao-linha', { hasText: 'LL Tratores' })).toContainText('1')
+    await expect(page.locator('.comparacao-linha', { hasText: 'Lojão dos Tratores' })).toContainText('0')
+    await expect(page.locator('.legenda')).toContainText('Enviada ao fornecedor')
     expect(problemas).toEqual([])
   })
 
@@ -226,7 +235,13 @@ test.describe.serial('Aplicativo de garantias', () => {
     await page.goto('/garantias/nova')
     await expect(page.getByText('Seu usuário tem acesso somente para consulta.')).toBeVisible()
     await page.goto('/usuarios')
+    await expect(page).toHaveURL(/\/configuracoes\/usuarios$/)
     await expect(page.getByText('Acesso restrito a administradores.')).toBeVisible()
+    // Consulta só vê as abas Marcas e Minha conta.
+    await page.goto('/configuracoes')
+    await expect(page).toHaveURL(/\/configuracoes\/conta$/)
+    const abas = page.getByRole('navigation', { name: 'Seções das configurações' })
+    await expect(abas.getByRole('link')).toHaveText(['Marcas', 'Minha conta'])
     expect(problemas).toEqual([])
   })
 
@@ -248,7 +263,7 @@ test.describe.serial('Aplicativo de garantias', () => {
     const op = await novaPagina(browser)
     const page = op.page
     await entrarNoPainel(page, USUARIOS.operador, SENHA_NOVA)
-    await page.goto('/minha-conta')
+    await page.goto('/configuracoes/conta')
     await page.getByRole('button', { name: 'Ativar verificação em duas etapas' }).click()
     await expect(page.getByRole('img', { name: 'Código QR para o aplicativo autenticador' })).toBeVisible()
     const segredo = (await page.locator('.cadastro-2fa code').textContent())!.trim()
@@ -271,7 +286,7 @@ test.describe.serial('Aplicativo de garantias', () => {
 
     const adm = await novaPagina(browser)
     await entrarNoPainel(adm.page, USUARIOS.admin, SENHA_ADMIN)
-    await adm.page.goto('/usuarios')
+    await adm.page.goto('/configuracoes/usuarios')
     const linha = adm.page.getByRole('row', { name: new RegExp(USUARIOS.operador) })
     await expect(linha).toContainText('Ativada')
     await linha.getByRole('button', { name: 'Remover 2 etapas' }).click()
@@ -290,7 +305,7 @@ test.describe.serial('Aplicativo de garantias', () => {
   test('admin redefine senha e bloqueia usuário', async ({ browser }) => {
     const adm = await novaPagina(browser)
     await entrarNoPainel(adm.page, USUARIOS.admin, SENHA_ADMIN)
-    await adm.page.goto('/usuarios')
+    await adm.page.goto('/configuracoes/usuarios')
     const linha = adm.page.getByRole('row', { name: new RegExp(USUARIOS.consulta) })
     await linha.getByRole('button', { name: 'Redefinir senha' }).click()
     const dialogo = adm.page.getByRole('dialog', { name: 'Redefinir senha' })

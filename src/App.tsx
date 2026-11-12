@@ -1,4 +1,4 @@
-import { Link, RouterProvider, createBrowserRouter, useParams, useRouteError } from 'react-router-dom'
+import { Link, Navigate, RouterProvider, createBrowserRouter, useParams, useRouteError } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { AvisosProvider } from './components/Avisos'
 import { Layout } from './components/Layout'
@@ -12,6 +12,7 @@ import { Clientes, Marcas, Produtos } from './pages/Cadastros'
 import { Importar } from './pages/Importar'
 import { Auditoria, Usuarios } from './pages/Administracao'
 import { MinhaConta } from './pages/MinhaConta'
+import { Configuracoes, ConfiguracoesInicio } from './pages/Configuracoes'
 
 function NaoEncontrado() {
   return (
@@ -64,11 +65,24 @@ const router = createBrowserRouter([
       { path: 'garantias/:id/editar', element: <EditarGarantia /> },
       { path: 'clientes', element: <Clientes /> },
       { path: 'produtos', element: <Produtos /> },
-      { path: 'marcas', element: <Marcas /> },
-      { path: 'importar', element: <Importar /> },
-      { path: 'usuarios', element: <Usuarios /> },
-      { path: 'auditoria', element: <Auditoria /> },
-      { path: 'minha-conta', element: <MinhaConta /> },
+      {
+        path: 'configuracoes',
+        element: <Configuracoes />,
+        children: [
+          { index: true, element: <ConfiguracoesInicio /> },
+          { path: 'importar', element: <Importar /> },
+          { path: 'usuarios', element: <Usuarios /> },
+          { path: 'marcas', element: <Marcas /> },
+          { path: 'auditoria', element: <Auditoria /> },
+          { path: 'conta', element: <MinhaConta /> },
+        ],
+      },
+      // Endereços antigos continuam funcionando.
+      { path: 'importar', element: <Navigate replace to="/configuracoes/importar" /> },
+      { path: 'usuarios', element: <Navigate replace to="/configuracoes/usuarios" /> },
+      { path: 'marcas', element: <Navigate replace to="/configuracoes/marcas" /> },
+      { path: 'auditoria', element: <Navigate replace to="/configuracoes/auditoria" /> },
+      { path: 'minha-conta', element: <Navigate replace to="/configuracoes/conta" /> },
       { path: '*', element: <NaoEncontrado /> },
     ],
   },

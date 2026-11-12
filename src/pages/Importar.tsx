@@ -169,7 +169,7 @@ export function Importar() {
     <div className="pagina">
       <div className="pagina-cabecalho">
         <div>
-          <h1>Importar listas</h1>
+          <h2 className="titulo-secao">Importar planilhas</h2>
           <p className="texto-suave">
             Envie a planilha de produtos ou de clientes (Excel .xlsx ou .csv). Itens que já existem são atualizados — nada
             é duplicado.
@@ -214,10 +214,19 @@ export function Importar() {
           <input
             id="arquivo-importacao"
             type="file"
+            className="sr-only"
             accept=".xlsx,.xlsm,.csv,.txt"
+            onClick={(e) => {
+              // Permite escolher o mesmo arquivo de novo depois de corrigi-lo.
+              e.currentTarget.value = ''
+            }}
             onChange={(e) => void escolherArquivo(e.target.files?.[0])}
             disabled={lendo || progresso !== null}
           />
+          <label htmlFor="arquivo-importacao" className={lendo || progresso !== null ? 'botao desabilitado' : 'botao'}>
+            Escolher arquivo…
+          </label>
+          {arquivo && <span className="texto-suave">{arquivo}</span>}
           <button
             type="button"
             className="botao botao-secundario botao-pequeno"
