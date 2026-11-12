@@ -69,3 +69,18 @@ export const IconeSair = () => (
     <path d="M5 12h11" />
   </Icone>
 )
+
+export const IconeCompras = () => (
+  <Icone>
+    <circle cx="9" cy="20" r="1.3" />
+    <circle cx="18" cy="20" r="1.3" />
+    <path d="M3 4h2.4l2.1 11h10.2l2-8H6.6" />
+  </Icone>
+)
+
+export const IconeNotas = () => (
+  <Icone>
+    <path d="M6 3h9l4 4v14l-2.5-1.5L14 21l-2.5-1.5L9 21l-2.5-1.5L4 21V5a2 2 0 0 1 2-2z" />
+    <path d="M8 9h7M8 13h7" />
+  </Icone>
+)

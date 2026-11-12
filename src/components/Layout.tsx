@@ -6,8 +6,10 @@ import { useAtualizacao } from '../lib/atualizacao'
 import { rotuloPapel } from '../lib/constantes'
 import {
   IconeClientes,
+  IconeCompras,
   IconeConfiguracoes,
   IconeGarantias,
+  IconeNotas,
   IconePainel,
   IconeProdutos,
   IconeSair,
@@ -20,9 +22,12 @@ function iniciais(nome: string): string {
 }
 
 export function Layout() {
-  const { perfil, podeEditar, sair } = useAuth()
+  const { perfil, podeEditar, ehAdmin, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
   const local = useLocation()
+  // Cada seção (garantias, compras, configurações…) entra com animação; abas internas animam por conta própria.
+  const partes = local.pathname.split('/')
+  const chaveTela = partes[1] === 'compras' || partes[1] === 'configuracoes' ? `/${partes[1]}` : local.pathname
   const { estado: atualizacao } = useAtualizacao()
   const temAtualizacao = atualizacao?.fase === 'disponivel' || atualizacao?.fase === 'baixando'
 
@@ -67,6 +72,7 @@ export function Layout() {
         )}
 
         <nav aria-label="Menu principal" className="menu-nav">
+          <span className="nav-secao">Garantias</span>
           <NavLink to="/" end className={link}>
             <IconePainel />
             Painel
@@ -83,6 +89,19 @@ export function Layout() {
             <IconeProdutos />
             Produtos
           </NavLink>
+          {ehAdmin && (
+            <>
+              <span className="nav-secao">Compras</span>
+              <NavLink to="/compras" end className={link}>
+                <IconeCompras />
+                Desempenho
+              </NavLink>
+              <NavLink to="/compras/notas" className={link}>
+                <IconeNotas />
+                Notas de entrada
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="menu-rodape">
@@ -109,7 +128,9 @@ export function Layout() {
 
       <main className="conteudo" id="conteudo">
         <AvisoAtualizacao />
-        <Outlet />
+        <div key={chaveTela} className="transicao-pagina">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

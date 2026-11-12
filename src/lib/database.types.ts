@@ -65,6 +65,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"compras_notas": {
+                  Row: {
+                    "atualizado_em": string,"chave_unica": string,"criado_em": string,"criado_por": string | null,"data_entrada": string,"empresa_id": number,"fornecedor": string,"id": number,"numero": string,"observacoes": string | null,"valor_referencia": number | null,"valor_total": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "atualizado_em"?: string,"chave_unica"?: string,"criado_em"?: string,"criado_por"?: string | null,"data_entrada": string,"empresa_id": number,"fornecedor": string,"id"?: never,"numero": string,"observacoes"?: string | null,"valor_referencia"?: number | null,"valor_total": number
+                  }
+                  Update: {
+                    "atualizado_em"?: string,"chave_unica"?: string,"criado_em"?: string,"criado_por"?: string | null,"data_entrada"?: string,"empresa_id"?: number,"fornecedor"?: string,"id"?: never,"numero"?: string,"observacoes"?: string | null,"valor_referencia"?: number | null,"valor_total"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "compras_notas_criado_por_fkey"
+      columns: ["criado_por"]
+isOneToOne: false
+      referencedRelation: "perfis"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "compras_notas_empresa_id_fkey"
+      columns: ["empresa_id"]
+isOneToOne: false
+      referencedRelation: "empresas"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"empresas": {
                   Row: {
                     "ativo": boolean,"criado_em": string,"id": number,"nome": string,"tipo": string
@@ -252,7 +278,21 @@ isOneToOne: false
                 }
           }
           Views: {
-            "vw_garantias": {
+            "vw_compras_mensal": {
+                  Row: {
+                    "empresa_id": number,"fornecedores": number | null,"mes": string | null,"notas": number | null,"notas_com_referencia": number | null,"saving": number | null,"valor_pago_com_referencia": number | null,"valor_referencia": number | null,"valor_total": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "compras_notas_empresa_id_fkey"
+      columns: ["empresa_id"]
+isOneToOne: false
+      referencedRelation: "empresas"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"vw_garantias": {
                   Row: {
                     "atualizado_em": string,"atualizado_por": string | null,"atualizado_por_nome": string | null,"busca": string | null,"cliente_codigo": string,"cliente_id": number,"cliente_nome": string,"criado_em": string,"criado_por": string | null,"criado_por_nome": string | null,"data_abertura": string,"data_conclusao": string | null,"data_venda": string | null,"defeito": string,"empresa_id": number,"empresa_nome": string,"empresa_tipo": string,"fornecedor": string | null,"id": number,"itens_resumo": string | null,"nota_fiscal_compra": string | null,"nota_fiscal_venda": string | null,"observacoes": string | null,"origem": string | null,"protocolo_fornecedor": string | null,"qtd_itens": number | null,"quantidade": number | null,"resolucao": string | null,"status": string,"tem_importado": boolean | null,"tem_nacional": boolean | null,"valor_total": number | null
                   }
@@ -304,6 +344,9 @@ isOneToOne: false
                            },
 "importar_clientes":
 { Args: { "p_itens": Json }; Returns: Json
+                           },
+"importar_compras_notas":
+{ Args: { "p_empresa_id": number,"p_itens": Json }; Returns: Json
                            },
 "importar_produtos":
 { Args: { "p_itens": Json }; Returns: Json

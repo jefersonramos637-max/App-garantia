@@ -14,6 +14,8 @@ import { Auditoria, Usuarios } from './pages/Administracao'
 import { MinhaConta } from './pages/MinhaConta'
 import { Configuracoes, ConfiguracoesInicio } from './pages/Configuracoes'
 import { Atualizacao } from './pages/Atualizacao'
+import { Compras, ComprasResumo } from './pages/Compras'
+import { ComprasImportar, ComprasNotas } from './pages/ComprasNotas'
 
 function NaoEncontrado() {
   return (
@@ -66,6 +68,15 @@ const router = createBrowserRouter([
       { path: 'garantias/:id/editar', element: <EditarGarantia /> },
       { path: 'clientes', element: <Clientes /> },
       { path: 'produtos', element: <Produtos /> },
+      {
+        path: 'compras',
+        element: <Compras />,
+        children: [
+          { index: true, element: <ComprasResumo /> },
+          { path: 'notas', element: <ComprasNotas /> },
+          { path: 'importar', element: <ComprasImportar /> },
+        ],
+      },
       {
         path: 'configuracoes',
         element: <Configuracoes />,

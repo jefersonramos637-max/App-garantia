@@ -54,6 +54,17 @@ registra aparece **na hora** para todas as outras.
   período) e **exportação para Excel**.
 - **Clientes** e **Produtos** (cada produto com suas várias marcas).
 
+**Compras** (somente administradores — segundo bloco do menu lateral):
+
+- **Notas de entrada**: lance as notas do mês (empresa, número, fornecedor, data, valor pago e, opcionalmente, o
+  **valor de referência** — tabela, cotação inicial ou preço anterior). Nota repetida (mesma empresa, fornecedor e
+  número) é recusada ou atualizada na importação.
+- **Importar planilha** de notas (Excel ou CSV), com modelo para baixar, prévia e conferência.
+- **Desempenho**: notas por mês, valor comprado, **saving** (valor de referência − valor pago), % de saving,
+  cobertura (notas com referência), ticket médio e gráficos por mês, por empresa e período (12 meses, ano, ano anterior).
+- Depois de atualizar o programa, **cole de novo o script do banco** no Supabase (SQL Editor): ele é seguro para repetir
+  e cria as tabelas de Compras sem mexer nos dados existentes.
+
 **Configurações** (no rodapé do menu):
 
 - **Importar planilhas** (administrador): listas de produtos e de clientes em Excel (.xlsx) ou CSV, com prévia e

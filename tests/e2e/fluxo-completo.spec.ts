@@ -323,6 +323,69 @@ test.describe.serial('Aplicativo de garantias', () => {
     expect(problemas).toEqual([])
   })
 
+  test('compras: administrador lança e importa notas e vê o desempenho; operador não acessa', async ({ browser }) => {
+    const adm = await novaPagina(browser)
+    const page = adm.page
+    await entrarNoPainel(page, USUARIOS.admin, SENHA_ADMIN)
+    const menu = page.getByRole('navigation', { name: 'Menu principal' })
+    await expect(menu.getByText('Compras', { exact: true })).toBeVisible()
+    await menu.getByRole('link', { name: 'Notas de entrada' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Compras' })).toBeVisible()
+    await expect(page.getByText('Nenhuma nota encontrada')).toBeVisible()
+
+    // Lançamento manual (com saving calculado na hora)
+    await page.getByRole('button', { name: '+ Lançar nota' }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Lançar nota de entrada' })
+    await dialogo.getByLabel('Número da nota').fill('5001')
+    await dialogo.getByLabel('Fornecedor').fill('AGCO DO BRASIL')
+    await dialogo.getByLabel('Valor pago na nota (R$)').fill('9.000,00')
+    await dialogo.getByLabel('Valor de referência (R$)').fill('10.000,00')
+    await expect(dialogo.getByText(/Saving desta nota: R\$\s1\.000,00/)).toBeVisible()
+    await dialogo.getByRole('button', { name: 'Salvar nota' }).click()
+    await expect(page.getByRole('row', { name: /5001/ })).toContainText('AGCO DO BRASIL')
+
+    // A mesma nota não pode ser lançada duas vezes
+    await page.getByRole('button', { name: '+ Lançar nota' }).click()
+    await dialogo.getByLabel('Número da nota').fill('5001')
+    await dialogo.getByLabel('Fornecedor').fill('agco do brasil')
+    await dialogo.getByLabel('Valor pago na nota (R$)').fill('1')
+    await dialogo.getByRole('button', { name: 'Salvar nota' }).click()
+    await expect(dialogo.getByRole('alert')).toContainText('Já existe')
+    await dialogo.getByRole('button', { name: 'Cancelar' }).click()
+
+    // Importação de planilha (CSV do Excel): 1 nota atualizada e 2 novas
+    await page.getByRole('link', { name: 'Importar planilha' }).click()
+    const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    const csv = Buffer.from(
+      `Número da nota;Fornecedor;Data de entrada;Valor da nota;Valor de referência\r\n5001;AGCO DO BRASIL;${hoje};8.000,00;10.000,00\r\n5002;VALTRA;${hoje};4.000,00;5.000,00\r\n5003;SKF;${hoje};2.500,00;\r\n`,
+      'latin1',
+    )
+    await page.locator('#arquivo-notas').setInputFiles({ name: 'notas.csv', mimeType: 'text/csv', buffer: csv })
+    await expect(page.getByText('3 nota(s) a importar')).toBeVisible()
+    await page.getByRole('button', { name: 'Importar 3 nota(s)' }).click()
+    const resultado = page.getByRole('status').filter({ hasText: 'Importação concluída:' })
+    await expect(resultado).toContainText('2 nota(s) nova(s)')
+    await expect(resultado).toContainText('1 nota(s) atualizada(s)')
+
+    // Desempenho
+    await page.getByRole('link', { name: 'Resumo' }).click()
+    await expect(page.locator('.indicador', { hasText: 'Notas de entrada' })).toContainText('3')
+    await expect(page.locator('.indicador', { hasText: 'Valor comprado' })).toContainText(/R\$\s14\.500,00/)
+    await expect(page.locator('.indicador', { hasText: 'Saving' }).first()).toContainText(/R\$\s3\.000,00/)
+    await expect(page.locator('.indicador', { hasText: 'Notas com referência' })).toContainText('67%')
+    await expect(page.locator('.grafico-barra').first()).toBeVisible()
+
+    // Operador não vê nem acessa Compras
+    const op = await novaPagina(browser)
+    await entrarNoPainel(op.page, USUARIOS.operador, SENHA_NOVA)
+    await expect(op.page.getByRole('navigation', { name: 'Menu principal' }).getByText('Compras', { exact: true })).toHaveCount(0)
+    await op.page.goto('/compras')
+    await expect(op.page.getByText('Acesso restrito a administradores.')).toBeVisible()
+    expect([...adm.problemas, ...op.problemas]).toEqual([])
+    await adm.contexto.close()
+    await op.contexto.close()
+  })
+
   test('verificação em duas etapas: ativar, exigir código e admin remover', async ({ browser }) => {
     test.setTimeout(120_000)
     const op = await novaPagina(browser)

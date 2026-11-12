@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 interface Aba {
@@ -19,6 +19,7 @@ const ABAS: Aba[] = [
 /** Tela "Configurações": agrupa importação, usuários, marcas, auditoria e conta. */
 export function Configuracoes() {
   const { ehAdmin } = useAuth()
+  const local = useLocation()
   const abas = ABAS.filter((a) => ehAdmin || !a.somenteAdmin)
   return (
     <div className="pagina">
@@ -37,7 +38,9 @@ export function Configuracoes() {
           </NavLink>
         ))}
       </nav>
-      <Outlet />
+      <div key={local.pathname} className="transicao-pagina">
+        <Outlet />
+      </div>
     </div>
   )
 }

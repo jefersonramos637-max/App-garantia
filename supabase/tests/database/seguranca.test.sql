@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(76);
+select plan(85);
 
 -- ---------------------------------------------------------------------------
 -- Preparação: usuários de teste (o gatilho cria o perfil automaticamente)
@@ -317,6 +317,49 @@ select is(
   (select count(*)::int from auth.sessions where user_id = '00000000-0000-0000-0000-00000000000c'),
   0, 'bloquear usuário encerra as sessões dele'
 );
+
+-- ---------------------------------------------------------------------------
+-- COMPRAS: somente administradores
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal1"}', true);
+select lives_ok(
+  $$insert into compras_notas (empresa_id, numero, fornecedor, data_entrada, valor_total, valor_referencia)
+    values (1, 'NF 100', 'Fornecedor  A', '2026-10-05', 900, 1000)$$,
+  'compras: admin lança nota de entrada'
+);
+select throws_ok(
+  $$insert into compras_notas (empresa_id, numero, fornecedor, data_entrada, valor_total) values (1, 'nf 100', 'FORNECEDOR A', '2026-10-06', 5)$$,
+  '23505', null, 'compras: nota repetida (mesmo fornecedor e número) é recusada'
+);
+select is(
+  (select (importar_compras_notas(1::smallint, '[{"numero":"NF 100","fornecedor":"Fornecedor A","data_entrada":"2026-10-05","valor_total":850,"valor_referencia":1000},{"numero":"NF 101","fornecedor":"Fornecedor B","data_entrada":"2026-11-02","valor_total":500}]'::jsonb)) ->> 'novas'),
+  '1', 'compras: importação cria as novas e atualiza as existentes'
+);
+select is(
+  (select saving::text from vw_compras_mensal where mes = '2026-10-01' and empresa_id = 1),
+  '150.00', 'compras: saving = referência - valor pago (já com o valor atualizado)'
+);
+select is(
+  (select notas_com_referencia from vw_compras_mensal where mes = '2026-11-01' and empresa_id = 1),
+  0, 'compras: nota sem referência não entra no saving'
+);
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal1"}', true);
+select is((select count(*)::int from compras_notas), 0, 'compras: operador não vê notas');
+select throws_ok(
+  $$insert into compras_notas (empresa_id, numero, fornecedor, data_entrada, valor_total) values (1, 'X', 'Y', '2026-10-01', 1)$$,
+  '42501', null, 'compras: operador não lança notas'
+);
+select throws_ok(
+  $$select importar_compras_notas(1::smallint, '[]'::jsonb)$$, '42501', null, 'compras: operador não importa notas'
+);
+reset role;
+set local role anon;
+select throws_ok('select * from public.compras_notas', '42501', null, 'compras: visitante sem login não lê nada');
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Integrações no servidor (chave secreta / service_role) conseguem cadastrar

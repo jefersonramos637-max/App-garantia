@@ -107,6 +107,15 @@ export async function baixarModeloClientes(): Promise<void> {
   )
 }
 
+export async function baixarModeloNotas(): Promise<void> {
+  const dados: SheetData = [
+    ['Número da nota', 'Fornecedor', 'Data de entrada', 'Valor da nota', 'Valor de referência', 'Observações'].map((t) => ({ value: t, fontWeight: 'bold' as const })),
+    ['12345', 'AGCO DO BRASIL', '05/11/2026', '9.000,00', '10.000,00', ''],
+    ['12346', 'VALTRA PEÇAS', '06/11/2026', '4.250,50', '', 'sem cotação anterior'],
+  ]
+  await writeXlsxFile(dados, { columns: [{ width: 16 }, { width: 30 }, { width: 16 }, { width: 16 }, { width: 20 }, { width: 30 }] }).toFile('modelo-notas-entrada.xlsx')
+}
+
 export function nomeArquivoSeguro(nome: string): string {
   const semAcento = nome.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
   const limpo = semAcento.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^[-.]+/, '')

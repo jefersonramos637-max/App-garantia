@@ -1,7 +1,7 @@
 // Interpretação de planilhas (Excel/CSV) de PRODUTOS e CLIENTES.
 // Funções puras (sem acesso a arquivos), testadas em planilha.test.ts.
 
-import { normalizarBusca } from './formato'
+import { lerNumeroBR, normalizarBusca } from './formato'
 import type { Origem } from './constantes'
 
 export type Celula = string | number | boolean | Date | null | undefined
@@ -390,4 +390,165 @@ export function emLotes<T>(lista: T[], tamanho: number): T[][] {
   const lotes: T[][] = []
   for (let i = 0; i < lista.length; i += tamanho) lotes.push(lista.slice(i, i + tamanho))
   return lotes
+}
+
+// ---------------------------------------------------------------------------
+// Notas fiscais de entrada (Compras)
+// ---------------------------------------------------------------------------
+
+export type CampoNota = 'numero' | 'fornecedor' | 'data' | 'valor' | 'referencia' | 'observacoes'
+
+export const CAMPOS_NOTA: { campo: CampoNota; rotulo: string; obrigatorio: boolean }[] = [
+  { campo: 'numero', rotulo: 'Número da nota', obrigatorio: true },
+  { campo: 'fornecedor', rotulo: 'Fornecedor', obrigatorio: true },
+  { campo: 'data', rotulo: 'Data de entrada', obrigatorio: true },
+  { campo: 'valor', rotulo: 'Valor da nota (pago)', obrigatorio: true },
+  { campo: 'referencia', rotulo: 'Valor de referência (tabela/cotação)', obrigatorio: false },
+  { campo: 'observacoes', rotulo: 'Observações', obrigatorio: false },
+]
+
+const PADROES_NOTA: [CampoNota, RegExp][] = [
+  ['referencia', /(referencia|tabela|cotacao|orcado|valor inicial|preco anterior|valor anterior)/],
+  ['valor', /(valor|total|vlr|pago)/],
+  ['data', /(data|entrada|emissao|lancamento)/],
+  ['fornecedor', /(fornecedor|emitente|razao|distribuidor)/],
+  ['observacoes', /(obs|observac)/],
+  ['numero', /(numero|^nf|\bnf\b|nota|^n$|^no$|documento)/],
+]
+
+export function detectarColunasNota(cabecalho: string[]): Record<CampoNota, number | null> {
+  return detectar(cabecalho, PADROES_NOTA)
+}
+
+export function localizarCabecalhoNota(linhas: Linhas): number {
+  const limite = Math.min(linhas.length, 15)
+  for (let i = 0; i < limite; i++) {
+    const cab = (linhas[i] ?? []).map(textoCelula)
+    const reconhecidas = cab.filter((h) => h && PADROES_NOTA.some(([, r]) => r.test(normalizarBusca(h)))).length
+    if (reconhecidas >= 3) return i
+  }
+  const primeira = linhas.findIndex((l) => !linhaVazia(l))
+  return primeira < 0 ? 0 : primeira
+}
+
+/** Data de uma célula: Date do Excel, "dd/mm/aaaa", "dd/mm/aa" ou "aaaa-mm-dd" -> "AAAA-MM-DD" (ou null). */
+export function lerData(c: Celula): string | null {
+  const montar = (a: number, m: number, d: number): string | null => {
+    const t = new Date(Date.UTC(a, m - 1, d))
+    if (t.getUTCFullYear() !== a || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d || a < 2000 || a > 2100) return null
+    return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+  if (c instanceof Date) return Number.isNaN(c.getTime()) ? null : montar(c.getUTCFullYear(), c.getUTCMonth() + 1, c.getUTCDate())
+  const t = textoCelula(c)
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t)
+  if (m) return montar(Number(m[1]), Number(m[2]), Number(m[3]))
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/.exec(t)
+  if (m) return montar(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1]))
+  return null
+}
+
+/** Valor monetário: número do Excel ou texto brasileiro ("1.234,56"). null se vazio, NaN se inválido. */
+export function lerValor(c: Celula): number | null {
+  if (typeof c === 'number') return Number.isFinite(c) ? c : Number.NaN
+  const t = textoCelula(c)
+  return t === '' ? null : lerNumeroBR(t)
+}
+
+export interface NotaImportada {
+  numero: string
+  fornecedor: string
+  data_entrada: string
+  valor_total: number
+  valor_referencia: number | null
+  observacoes: string | null
+}
+
+export interface ResultadoNotas {
+  itens: NotaImportada[]
+  erros: Problema[]
+  avisos: Problema[]
+  linhasLidas: number
+  totalValor: number
+  totalReferencia: number
+}
+
+export function montarNotas(linhas: Linhas, linhaCabecalho: number, colunas: Record<CampoNota, number | null>): ResultadoNotas {
+  const erros: Problema[] = []
+  const avisos: Problema[] = []
+  const porChave = new Map<string, NotaImportada & { linha: number }>()
+  let linhasLidas = 0
+  const faltando = CAMPOS_NOTA.filter((c) => c.obrigatorio && colunas[c.campo] === null).map((c) => c.rotulo)
+  if (faltando.length) {
+    return {
+      itens: [],
+      erros: [{ linha: linhaCabecalho + 1, motivo: `Selecione as colunas: ${faltando.join(', ')}.` }],
+      avisos,
+      linhasLidas: 0,
+      totalValor: 0,
+      totalReferencia: 0,
+    }
+  }
+  const col = (linha: Celula[], campo: CampoNota): Celula => (colunas[campo] === null ? null : linha[colunas[campo]!])
+
+  for (let i = linhaCabecalho + 1; i < linhas.length; i++) {
+    const linha = linhas[i]
+    if (linhaVazia(linha)) continue
+    linhasLidas++
+    const n = i + 1
+    const numero = textoCelula(col(linha, 'numero'))
+    const fornecedor = textoCelula(col(linha, 'fornecedor'))
+    const data = lerData(col(linha, 'data'))
+    const valor = lerValor(col(linha, 'valor'))
+    const referencia = lerValor(col(linha, 'referencia'))
+    if (!numero || !fornecedor) {
+      erros.push({ linha: n, motivo: 'Sem número da nota ou fornecedor — linha ignorada.' })
+      continue
+    }
+    if (numero.length > 40 || fornecedor.length > 200) {
+      erros.push({ linha: n, motivo: `Nota ${numero}: número ou fornecedor grande demais — linha ignorada.` })
+      continue
+    }
+    if (!data) {
+      erros.push({ linha: n, motivo: `Nota ${numero}: data de entrada inválida — linha ignorada.` })
+      continue
+    }
+    if (valor === null || Number.isNaN(valor) || valor < 0) {
+      erros.push({ linha: n, motivo: `Nota ${numero}: valor inválido — linha ignorada.` })
+      continue
+    }
+    let ref: number | null = referencia
+    if (ref !== null && (Number.isNaN(ref) || ref < 0)) {
+      avisos.push({ linha: n, motivo: `Nota ${numero}: valor de referência inválido — será ignorado (sem saving).` })
+      ref = null
+    }
+    const chave = `${normalizarBusca(fornecedor)}|${normalizarBusca(numero)}`
+    const anterior = porChave.get(chave)
+    if (anterior) avisos.push({ linha: n, motivo: `Nota ${numero} de ${fornecedor} repetida (também na linha ${anterior.linha}). Será usada esta linha.` })
+    porChave.set(chave, {
+      linha: n,
+      numero,
+      fornecedor,
+      data_entrada: data,
+      valor_total: Math.round(valor * 100) / 100,
+      valor_referencia: ref === null ? null : Math.round(ref * 100) / 100,
+      observacoes: textoCelula(col(linha, 'observacoes')).slice(0, 1000) || null,
+    })
+  }
+
+  const itens: NotaImportada[] = [...porChave.values()].map((x) => ({
+    numero: x.numero,
+    fornecedor: x.fornecedor,
+    data_entrada: x.data_entrada,
+    valor_total: x.valor_total,
+    valor_referencia: x.valor_referencia,
+    observacoes: x.observacoes,
+  }))
+  return {
+    itens,
+    erros,
+    avisos,
+    linhasLidas,
+    totalValor: itens.reduce((t, x) => t + x.valor_total, 0),
+    totalReferencia: itens.reduce((t, x) => t + (x.valor_referencia ?? 0), 0),
+  }
 }

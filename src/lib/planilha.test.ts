@@ -10,6 +10,10 @@ import {
   localizarCabecalho,
   montarClientes,
   montarProdutos,
+  detectarColunasNota,
+  lerData,
+  lerValor,
+  montarNotas,
   separarMarcas,
   textoCelula,
 } from './planilha'
@@ -192,5 +196,56 @@ describe('lotes', () => {
   it('divide em pedaços', () => {
     expect(emLotes([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
     expect(emLotes([], 3)).toEqual([])
+  })
+})
+
+describe('notas de entrada (compras)', () => {
+  it('lê datas em vários formatos e recusa datas impossíveis', () => {
+    expect(lerData('05/11/2026')).toBe('2026-11-05')
+    expect(lerData('5.11.26')).toBe('2026-11-05')
+    expect(lerData('2026-11-05T00:00:00')).toBe('2026-11-05')
+    expect(lerData(new Date(Date.UTC(2026, 10, 5)))).toBe('2026-11-05')
+    expect(lerData('31/02/2026')).toBeNull()
+    expect(lerData('lixo')).toBeNull()
+    expect(lerData(null)).toBeNull()
+  })
+
+  it('lê valores do Excel e em texto brasileiro', () => {
+    expect(lerValor(1234.5)).toBe(1234.5)
+    expect(lerValor('1.234,56')).toBe(1234.56)
+    expect(lerValor('')).toBeNull()
+    expect(lerValor('abc')).toBeNaN()
+  })
+
+  const linhas: Linhas = [
+    ['RELATÓRIO DE ENTRADAS'],
+    ['Nº da nota', 'Fornecedor', 'Data de entrada', 'Valor da nota', 'Valor de tabela', 'Obs'],
+    ['1001', 'AGCO do Brasil', '05/11/2026', '9.000,00', '10.000,00', ''],
+    [1002, 'Valtra', new Date(Date.UTC(2026, 10, 6)), 5000, null, 'urgente'],
+    ['1001', 'agco do brasil', '07/11/2026', '8.500,00', '10.000,00', ''],
+    ['1003', 'SKF', '32/13/2026', '100', '', ''],
+    ['', 'SKF', '01/11/2026', '100', '', ''],
+    ['1004', 'NSK', '02/11/2026', 'x', '', ''],
+  ]
+
+  it('reconhece as colunas e monta as notas', () => {
+    const cab = 1
+    const c = detectarColunasNota(linhas[cab].map(textoCelula))
+    expect(c).toEqual({ numero: 0, fornecedor: 1, data: 2, valor: 3, referencia: 4, observacoes: 5 })
+    const r = montarNotas(linhas, cab, c)
+    expect(r.itens).toEqual([
+      { numero: '1001', fornecedor: 'agco do brasil', data_entrada: '2026-11-07', valor_total: 8500, valor_referencia: 10000, observacoes: null },
+      { numero: '1002', fornecedor: 'Valtra', data_entrada: '2026-11-06', valor_total: 5000, valor_referencia: null, observacoes: 'urgente' },
+    ])
+    expect(r.erros.map((e) => e.linha)).toEqual([6, 7, 8])
+    expect(r.avisos.some((a) => a.motivo.includes('repetida'))).toBe(true)
+    expect(r.totalValor).toBe(13500)
+    expect(r.totalReferencia).toBe(10000)
+  })
+
+  it('sem colunas obrigatórias não importa nada', () => {
+    const r = montarNotas(linhas, 1, { numero: 0, fornecedor: null, data: 2, valor: 3, referencia: null, observacoes: null })
+    expect(r.itens).toHaveLength(0)
+    expect(r.erros[0].motivo).toContain('Fornecedor')
   })
 })

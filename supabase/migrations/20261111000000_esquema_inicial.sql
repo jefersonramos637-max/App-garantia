@@ -1803,6 +1803,171 @@ grant execute on function public.admin_remover_2fa(uuid) to authenticated;
 grant execute on function public.salvar_garantia(jsonb, jsonb, bigint, timestamptz) to authenticated;
 
 -- =============================================================================
+--  COMPRAS: notas fiscais de ENTRADA e desempenho (saving)
+--  Visível e editável somente por administradores.
+--  saving = valor de referência (tabela / preço anterior / cotação inicial) - valor pago na nota
+-- =============================================================================
+create table if not exists public.compras_notas (
+  id               bigint generated always as identity primary key,
+  empresa_id       smallint not null references public.empresas (id),
+  numero           text not null check (char_length(numero) between 1 and 40),
+  fornecedor       text not null check (char_length(fornecedor) between 1 and 200),
+  data_entrada     date not null,
+  valor_total      numeric(14, 2) not null check (valor_total >= 0 and valor_total <= 1000000000),
+  valor_referencia numeric(14, 2) check (valor_referencia is null or (valor_referencia >= 0 and valor_referencia <= 1000000000)),
+  observacoes      text check (observacoes is null or char_length(observacoes) <= 1000),
+  chave_unica      text not null default '' unique,
+  criado_por       uuid references public.perfis (id) on delete set null,
+  criado_em        timestamptz not null default now(),
+  atualizado_em    timestamptz not null default now()
+);
+
+create index if not exists compras_notas_data on public.compras_notas (data_entrada desc, id desc);
+create index if not exists compras_notas_empresa on public.compras_notas (empresa_id);
+create index if not exists compras_notas_criado_por on public.compras_notas (criado_por);
+
+create or replace function privado.compras_notas_preparar()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.numero := coalesce(privado.limpar(new.numero), '');
+  new.fornecedor := coalesce(privado.limpar(new.fornecedor), '');
+  new.observacoes := privado.limpar(new.observacoes);
+  -- Mesma nota (empresa + fornecedor + número) não pode ser lançada duas vezes.
+  new.chave_unica := new.empresa_id::text || '|' || privado.normalizar(new.fornecedor) || '|' || privado.normalizar(new.numero);
+  if tg_op = 'INSERT' then
+    new.criado_por := coalesce(auth.uid(), new.criado_por);
+    new.criado_em := now();
+  else
+    new.criado_em := old.criado_em;
+  end if;
+  new.atualizado_em := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists compras_notas_preparar on public.compras_notas;
+create trigger compras_notas_preparar
+  before insert or update on public.compras_notas
+  for each row execute function privado.compras_notas_preparar();
+
+drop trigger if exists auditoria on public.compras_notas;
+create trigger auditoria after insert or update or delete on public.compras_notas
+  for each row execute function privado.registrar_auditoria();
+
+-- Resumo por mês e empresa (a tela soma o que precisar).
+drop view if exists public.vw_compras_mensal;
+create view public.vw_compras_mensal
+with (security_invoker = true)
+as
+select
+  date_trunc('month', n.data_entrada)::date                         as mes,
+  n.empresa_id,
+  count(*)::int                                                     as notas,
+  count(distinct privado.normalizar(n.fornecedor))::int             as fornecedores,
+  sum(n.valor_total)                                                as valor_total,
+  count(*) filter (where n.valor_referencia is not null)::int       as notas_com_referencia,
+  coalesce(sum(n.valor_referencia) filter (where n.valor_referencia is not null), 0)  as valor_referencia,
+  coalesce(sum(n.valor_total) filter (where n.valor_referencia is not null), 0)       as valor_pago_com_referencia,
+  coalesce(sum(n.valor_referencia - n.valor_total) filter (where n.valor_referencia is not null), 0) as saving
+from public.compras_notas n
+group by 1, 2;
+
+alter table public.compras_notas enable row level security;
+
+drop policy if exists compras_notas_ler on public.compras_notas;
+create policy compras_notas_ler on public.compras_notas for select to authenticated
+  using ((select privado.eh_admin()));
+drop policy if exists compras_notas_inserir on public.compras_notas;
+create policy compras_notas_inserir on public.compras_notas for insert to authenticated
+  with check ((select privado.eh_admin()));
+drop policy if exists compras_notas_alterar on public.compras_notas;
+create policy compras_notas_alterar on public.compras_notas for update to authenticated
+  using ((select privado.eh_admin())) with check ((select privado.eh_admin()));
+drop policy if exists compras_notas_excluir on public.compras_notas;
+create policy compras_notas_excluir on public.compras_notas for delete to authenticated
+  using ((select privado.eh_admin()));
+
+revoke all on public.compras_notas from anon, authenticated;
+revoke all on public.vw_compras_mensal from anon, authenticated;
+grant select, delete on public.compras_notas to authenticated;
+grant insert (empresa_id, numero, fornecedor, data_entrada, valor_total, valor_referencia, observacoes),
+      update (empresa_id, numero, fornecedor, data_entrada, valor_total, valor_referencia, observacoes)
+  on public.compras_notas to authenticated;
+grant select on public.vw_compras_mensal to authenticated;
+
+-- Importação de planilha de notas (somente administradores). Atualiza notas já existentes.
+-- p_itens: [{"numero", "fornecedor", "data_entrada": "AAAA-MM-DD", "valor_total", "valor_referencia", "observacoes"}]
+create or replace function public.importar_compras_notas(p_empresa_id smallint, p_itens jsonb)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_item jsonb;
+  v_linha integer := 0;
+  v_novas integer := 0;
+  v_atualizadas integer := 0;
+  v_chave text;
+  v_id bigint;
+  v_numero text;
+  v_fornecedor text;
+begin
+  if not privado.eh_admin() then
+    raise exception 'Somente administradores podem importar notas de compras.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.empresas where id = p_empresa_id) then
+    raise exception 'Empresa inválida.' using errcode = '22023';
+  end if;
+  if p_itens is null or jsonb_typeof(p_itens) <> 'array' then
+    raise exception 'Formato de importação inválido.' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_itens) > 2000 then
+    raise exception 'Envie no máximo 2000 notas por vez.' using errcode = '22023';
+  end if;
+
+  for v_item in select value from jsonb_array_elements(p_itens) loop
+    v_linha := v_linha + 1;
+    v_numero := privado.limpar(v_item ->> 'numero');
+    v_fornecedor := privado.limpar(v_item ->> 'fornecedor');
+    if v_numero is null or v_fornecedor is null then
+      raise exception 'Item %: informe o número da nota e o fornecedor.', v_linha using errcode = '22023';
+    end if;
+    v_chave := p_empresa_id::text || '|' || privado.normalizar(v_fornecedor) || '|' || privado.normalizar(v_numero);
+    select n.id into v_id from public.compras_notas n where n.chave_unica = v_chave;
+
+    if v_id is null then
+      insert into public.compras_notas (empresa_id, numero, fornecedor, data_entrada, valor_total, valor_referencia, observacoes)
+      values (
+        p_empresa_id, v_numero, v_fornecedor,
+        (v_item ->> 'data_entrada')::date,
+        (v_item ->> 'valor_total')::numeric,
+        nullif(v_item ->> 'valor_referencia', '')::numeric,
+        v_item ->> 'observacoes'
+      );
+      v_novas := v_novas + 1;
+    else
+      update public.compras_notas set
+        data_entrada = (v_item ->> 'data_entrada')::date,
+        valor_total = (v_item ->> 'valor_total')::numeric,
+        valor_referencia = nullif(v_item ->> 'valor_referencia', '')::numeric,
+        observacoes = coalesce(v_item ->> 'observacoes', observacoes)
+      where id = v_id;
+      v_atualizadas := v_atualizadas + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('itens', v_linha, 'novas', v_novas, 'atualizadas', v_atualizadas);
+end;
+$$;
+
+revoke all on function public.importar_compras_notas(smallint, jsonb) from public, anon;
+grant execute on function public.importar_compras_notas(smallint, jsonb) to authenticated;
+
+-- =============================================================================
 --  ARMAZENAMENTO DE ARQUIVOS (bucket privado "anexos")
 --  Máx. 10 MB por arquivo; somente imagens e PDF.
 -- =============================================================================

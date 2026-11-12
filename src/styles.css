@@ -2103,3 +2103,257 @@ textarea:focus {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* =========================================================================
+   MENU EM SEÇÕES (Garantias / Compras)
+   ========================================================================= */
+.nav-secao {
+  margin: 0.9rem 0.7rem 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+}
+.nav-secao:first-child {
+  margin-top: 0.2rem;
+}
+
+/* =========================================================================
+   COMPRAS
+   ========================================================================= */
+.acoes-topo {
+  justify-content: space-between;
+}
+.indicador small {
+  font-size: 0.78rem;
+}
+.indicador-saving strong {
+  color: #1e7b45;
+}
+.grafico-barras {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  height: 210px;
+}
+.grafico-coluna {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.grafico-valor {
+  font-size: 0.66rem;
+  color: var(--texto-suave);
+  height: 1rem;
+  white-space: nowrap;
+}
+.grafico-trilho {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: repeating-linear-gradient(to top, transparent 0 24%, #f1f1ee 24% 25%);
+  border-radius: 4px;
+}
+.grafico-barra {
+  display: block;
+  width: 70%;
+  max-width: 36px;
+  min-height: 2px;
+  background: linear-gradient(to top, var(--marca-escura), var(--marca));
+  border-radius: 5px 5px 0 0;
+  transform-origin: bottom;
+  animation: crescer 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.grafico-barra.negativa {
+  background: linear-gradient(to top, #b42318, #e5645a);
+}
+.grafico-rotulo {
+  font-size: 0.7rem;
+  color: var(--texto-suave);
+  text-transform: capitalize;
+}
+
+/* =========================================================================
+   ANIMAÇÕES
+   ========================================================================= */
+@keyframes pagina-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes crescer {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fluxo {
+  to {
+    background-position: -300% 0;
+  }
+}
+@keyframes deriva {
+  from {
+    transform: translate3d(-5%, -3%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6%, 5%, 0) scale(1.2);
+  }
+}
+@keyframes modal-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+@keyframes fundo-entrar {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Transição entre telas */
+.transicao-pagina {
+  animation: pagina-entrar 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/* Cartões e indicadores aparecem em sequência */
+.indicadores > *,
+.painel-grade > *,
+.cartao,
+.painel-bloco {
+  animation: surgir 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.indicadores > :nth-child(2) {
+  animation-delay: 0.05s;
+}
+.indicadores > :nth-child(3) {
+  animation-delay: 0.1s;
+}
+.indicadores > :nth-child(4) {
+  animation-delay: 0.15s;
+}
+.tabela tbody tr {
+  animation: surgir 0.3s ease-out both;
+}
+.tabela tbody tr:nth-child(2) {
+  animation-delay: 0.03s;
+}
+.tabela tbody tr:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.tabela tbody tr:nth-child(4) {
+  animation-delay: 0.09s;
+}
+.tabela tbody tr:nth-child(5) {
+  animation-delay: 0.12s;
+}
+.tabela tbody tr:nth-child(n + 6) {
+  animation-delay: 0.15s;
+}
+.item-garantia {
+  animation: surgir 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Janelas (modais) */
+.modal[open] {
+  animation: modal-entrar 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.modal[open]::backdrop {
+  animation: fundo-entrar 0.22s ease-out;
+}
+
+/* Interações suaves */
+.botao,
+.nav-link,
+.subnav-item,
+.opcao-cartao,
+.opcao-pilula,
+.indicador,
+.legenda li a {
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+.botao:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+}
+.botao:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+a.indicador:hover {
+  transform: translateY(-2px);
+}
+input,
+select,
+textarea {
+  transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+}
+.item-garantia {
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.item-garantia:focus-within {
+  box-shadow: 0 6px 22px rgb(247 187 1 / 18%);
+  border-color: #ecd27a;
+}
+
+/* Fundo animado nas telas de entrada (login, 2 etapas, trocar senha) */
+.tela-entrada,
+.tela-cheia {
+  position: relative;
+  overflow: hidden;
+}
+.tela-entrada::before,
+.tela-cheia::before {
+  content: '';
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 38% at 22% 30%, rgb(247 187 1 / 26%), transparent 70%),
+    radial-gradient(34% 34% at 78% 72%, rgb(247 187 1 / 15%), transparent 70%),
+    radial-gradient(30% 30% at 70% 20%, rgb(255 255 255 / 6%), transparent 70%);
+  animation: deriva 16s ease-in-out infinite alternate;
+}
+.tela-entrada > *,
+.tela-cheia > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Formulário de garantia: faixa de cor em movimento no topo */
+.pagina-formulario .pagina-cabecalho::after {
+  content: '';
+  flex-basis: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f7bb01, #fff0b0, #f7bb01, #1a1a1a, #f7bb01);
+  background-size: 300% 100%;
+  animation: fluxo 7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
