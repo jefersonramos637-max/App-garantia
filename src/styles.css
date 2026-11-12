@@ -636,6 +636,7 @@ h1 .selo {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--superficie);
   border-right: 1px solid var(--borda);
   display: flex;
@@ -660,7 +661,7 @@ h1 .selo {
 .menu-marca small {
   color: var(--texto-suave);
   font-size: 0.74rem;
-  white-space: nowrap;
+  line-height: 1.3;
 }
 .botao-nova {
   margin: 0 0.1rem;

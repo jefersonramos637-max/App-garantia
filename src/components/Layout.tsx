@@ -51,7 +51,8 @@ export function Layout() {
           <img src="/icone.svg" alt="" width="34" height="34" />
           <div>
             <strong>Garantias</strong>
-            <small>Lojão dos Tratores · LL Tratores</small>
+            <small>Lojão dos Tratores</small>
+            <small>LL Tratores</small>
           </div>
         </div>
 
