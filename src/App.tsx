@@ -13,6 +13,7 @@ import { Importar } from './pages/Importar'
 import { Auditoria, Usuarios } from './pages/Administracao'
 import { MinhaConta } from './pages/MinhaConta'
 import { Configuracoes, ConfiguracoesInicio } from './pages/Configuracoes'
+import { Atualizacao } from './pages/Atualizacao'
 
 function NaoEncontrado() {
   return (
@@ -74,6 +75,7 @@ const router = createBrowserRouter([
           { path: 'usuarios', element: <Usuarios /> },
           { path: 'marcas', element: <Marcas /> },
           { path: 'auditoria', element: <Auditoria /> },
+          { path: 'atualizacao', element: <Atualizacao /> },
           { path: 'conta', element: <MinhaConta /> },
         ],
       },

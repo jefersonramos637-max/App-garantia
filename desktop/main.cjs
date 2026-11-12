@@ -5,7 +5,7 @@
 // app://garantias/. Os dados ficam no Supabase (internet). O programa se atualiza
 // sozinho a partir das versões publicadas no GitHub (Releases).
 
-const { app, BrowserWindow, Menu, dialog, protocol, session, shell } = require('electron')
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, session, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -174,6 +174,7 @@ function criarJanela() {
     autoHideMenuBar: true,
     webPreferences: {
       partition: PARTICAO,
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -229,7 +230,7 @@ function criarMenu() {
         { label: 'Recarregar', accelerator: 'CmdOrCtrl+R', click: () => janela && janela.webContents.reload() },
         { label: 'Voltar', accelerator: 'Alt+Left', click: () => janela && janela.webContents.navigationHistory.goBack() },
         { type: 'separator' },
-        { label: 'Procurar atualização', click: () => verificarAtualizacao(true) },
+        { label: 'Procurar atualização', click: () => verificarAtualizacao('menu') },
         { type: 'separator' },
         { label: 'Sair', accelerator: 'Alt+F4', role: 'quit' },
       ],
@@ -267,10 +268,24 @@ function criarMenu() {
 // Atualização automática (somente no programa instalado no Windows)
 // ---------------------------------------------------------------------------
 let atualizador = null
-let avisarSemAtualizacao = false
-
+let origemVerificacao = 'auto' // 'auto' | 'menu' | 'pagina'
 let versaoJaOferecida = null
-let baixando = false
+let baixandoPorAviso = false
+
+/** Estado mostrado na tela Configurações → Atualização. */
+const estadoAtualizacao = { suportado: false, fase: 'ocioso', versaoAtual: app.getVersion(), versaoNova: null, percentual: 0, mensagem: null }
+
+function definirEstado(mudancas) {
+  Object.assign(estadoAtualizacao, mudancas)
+  if (janela && !janela.isDestroyed()) janela.webContents.send('atualizacao:estado', estadoAtualizacao)
+}
+
+function marcarProgresso(valor, titulo) {
+  if (janela && !janela.isDestroyed()) {
+    janela.setProgressBar(valor)
+    janela.setTitle(titulo)
+  }
+}
 
 function configurarAtualizacao() {
   if (!app.isPackaged || process.platform !== 'win32') return
@@ -279,15 +294,18 @@ function configurarAtualizacao() {
   } catch {
     return
   }
+  estadoAtualizacao.suportado = true
   // Nada é baixado sem o usuário concordar.
   atualizador.autoDownload = false
   atualizador.autoInstallOnAppQuit = true
 
+  atualizador.on('checking-for-update', () => definirEstado({ fase: 'verificando', mensagem: null }))
+
   atualizador.on('update-available', async (info) => {
-    // Avisos automáticos: uma vez por versão; na busca manual, sempre.
-    if (!avisarSemAtualizacao && versaoJaOferecida === info.version) return
+    definirEstado({ fase: 'disponivel', versaoNova: info.version })
+    if (origemVerificacao === 'pagina') return // a tela já mostra o botão "Atualizar agora"
+    if (origemVerificacao === 'auto' && versaoJaOferecida === info.version) return
     versaoJaOferecida = info.version
-    avisarSemAtualizacao = false
     const { response } = await dialog.showMessageBox(janela, {
       type: 'info',
       buttons: ['Atualizar agora', 'Depois'],
@@ -298,62 +316,51 @@ function configurarAtualizacao() {
       detail: `Você está na versão ${app.getVersion()}. A atualização leva poucos segundos e o programa reinicia sozinho.`,
     })
     if (response === 0) {
-      baixando = true
-      if (janela) janela.setTitle('Garantias — baixando atualização…')
-      atualizador.downloadUpdate().catch(() => {
-        /* tratado no evento "error" */
-      })
+      baixandoPorAviso = true
+      baixarAtualizacao()
     }
   })
 
   atualizador.on('download-progress', (p) => {
-    if (janela && !janela.isDestroyed()) {
-      janela.setProgressBar(p.percent / 100)
-      janela.setTitle(`Garantias — baixando atualização ${Math.round(p.percent)}%`)
-    }
+    definirEstado({ fase: 'baixando', percentual: Math.round(p.percent) })
+    marcarProgresso(p.percent / 100, `Garantias — baixando atualização ${Math.round(p.percent)}%`)
   })
 
   atualizador.on('update-downloaded', () => {
-    baixando = false
-    if (janela && !janela.isDestroyed()) {
-      janela.setProgressBar(-1)
-      janela.setTitle('Garantias')
-    }
+    definirEstado({ fase: 'pronto', percentual: 100 })
+    marcarProgresso(-1, 'Garantias')
     // Instala e reabre o programa já atualizado.
     setImmediate(() => atualizador.quitAndInstall(false, true))
   })
 
   atualizador.on('update-not-available', () => {
-    if (avisarSemAtualizacao) {
-      avisarSemAtualizacao = false
+    definirEstado({ fase: 'atualizado', versaoNova: null })
+    if (origemVerificacao === 'menu') {
       void dialog.showMessageBox(janela, { type: 'info', title: 'Atualização', message: 'Você já está usando a versão mais recente.' })
     }
   })
 
   atualizador.on('error', (erro) => {
     console.warn('Atualização automática:', erro && erro.message)
-    if (janela && !janela.isDestroyed()) {
-      janela.setProgressBar(-1)
-      janela.setTitle('Garantias')
-    }
-    if (avisarSemAtualizacao || baixando) {
-      avisarSemAtualizacao = false
-      baixando = false
+    marcarProgresso(-1, 'Garantias')
+    definirEstado({ fase: 'erro', mensagem: 'Não foi possível falar com o servidor de atualizações. Verifique a internet e tente de novo.' })
+    if (origemVerificacao === 'menu' || baixandoPorAviso) {
+      baixandoPorAviso = false
       void dialog.showMessageBox(janela, {
         type: 'warning',
         title: 'Atualização',
-        message: 'Não foi possível atualizar agora. Verifique a internet e tente mais tarde (Aplicativo → Procurar atualização).',
+        message: 'Não foi possível atualizar agora. Verifique a internet e tente mais tarde.',
       })
     }
   })
 
-  verificarAtualizacao(false)
-  setInterval(() => verificarAtualizacao(false), 60 * 60 * 1000)
+  verificarAtualizacao('auto')
+  setInterval(() => verificarAtualizacao('auto'), 60 * 60 * 1000)
 }
 
-function verificarAtualizacao(manual) {
+function verificarAtualizacao(origem) {
   if (!atualizador) {
-    if (manual) {
+    if (origem === 'menu') {
       void dialog.showMessageBox(janela, {
         type: 'info',
         title: 'Atualização',
@@ -362,9 +369,35 @@ function verificarAtualizacao(manual) {
     }
     return
   }
-  avisarSemAtualizacao = manual
+  if (estadoAtualizacao.fase === 'baixando' || estadoAtualizacao.fase === 'pronto') return
+  origemVerificacao = origem
   atualizador.checkForUpdates().catch(() => {
     /* tratado no evento "error" */
+  })
+}
+
+function baixarAtualizacao() {
+  if (!atualizador || estadoAtualizacao.fase === 'baixando' || estadoAtualizacao.fase === 'pronto') return
+  definirEstado({ fase: 'baixando', percentual: 0 })
+  marcarProgresso(0, 'Garantias — baixando atualização…')
+  atualizador.downloadUpdate().catch(() => {
+    /* tratado no evento "error" */
+  })
+}
+
+/** Somente as telas do próprio programa podem pedir atualização. */
+function registrarPonteDeAtualizacao() {
+  const permitido = (evento) => ehDoPrograma(evento.senderFrame ? evento.senderFrame.url : '')
+  ipcMain.handle('atualizacao:estado', (evento) => (permitido(evento) ? estadoAtualizacao : null))
+  ipcMain.handle('atualizacao:verificar', (evento) => {
+    if (!permitido(evento)) return null
+    verificarAtualizacao('pagina')
+    return estadoAtualizacao
+  })
+  ipcMain.handle('atualizacao:instalar', (evento) => {
+    if (!permitido(evento)) return null
+    if (estadoAtualizacao.fase === 'disponivel') baixarAtualizacao()
+    return estadoAtualizacao
   })
 }
 
@@ -398,6 +431,7 @@ if (CONFIG) {
       const sessao = session.fromPartition(PARTICAO)
       registrarEnderecoInterno(sessao)
       protegerSessao(sessao)
+      registrarPonteDeAtualizacao()
       criarMenu()
       criarJanela()
       configurarAtualizacao()

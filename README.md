@@ -63,7 +63,7 @@ registra aparece **na hora** para todas as outras.
 - **Auditoria** (administrador): registro permanente de todas as inclusões, alterações e exclusões.
 - **Minha conta**: trocar senha, ativar verificação em duas etapas, sair de todos os aparelhos.
 
-Operadores e usuários de consulta veem em Configurações apenas **Marcas** e **Minha conta**.
+Operadores e usuários de consulta veem em Configurações apenas **Marcas**, **Atualização** e **Minha conta**.
 
 > **“Replicar as informações para os terceiros”:** o aplicativo usa um banco de dados central — tudo que você registra
 > fica disponível **imediatamente** para todas as pessoas que você liberar, em qualquer aparelho (as telas se atualizam

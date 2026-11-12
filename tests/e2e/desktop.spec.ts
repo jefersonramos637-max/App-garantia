@@ -86,6 +86,12 @@ test.describe('Programa para computador', () => {
 
       await entrar(janela, USUARIOS.operador)
 
+      // Configurações → Atualização: mostra a versão e o botão (fora do instalador, a atualização não é suportada).
+      await janela.goto('app://garantias/configuracoes/atualizacao')
+      await expect(janela.getByText(/Versão instalada:/)).toBeVisible()
+      await expect(janela.getByText('A atualização automática funciona no programa instalado no Windows.')).toBeVisible()
+      await expect(janela.getByRole('button', { name: 'Verificar atualização' })).toBeDisabled()
+
       // Rotas internas funcionam, inclusive ao recarregar a página.
       await janela.getByRole('navigation', { name: 'Menu principal' }).getByRole('link', { name: 'Garantias', exact: true }).click()
       await expect(janela.getByRole('heading', { level: 1, name: 'Garantias' })).toBeVisible()

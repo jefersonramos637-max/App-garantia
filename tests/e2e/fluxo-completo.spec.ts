@@ -241,7 +241,7 @@ test.describe.serial('Aplicativo de garantias', () => {
     await page.goto('/configuracoes')
     await expect(page).toHaveURL(/\/configuracoes\/conta$/)
     const abas = page.getByRole('navigation', { name: 'Seções das configurações' })
-    await expect(abas.getByRole('link')).toHaveText(['Marcas', 'Minha conta'])
+    await expect(abas.getByRole('link')).toHaveText(['Marcas', 'Atualização', 'Minha conta'])
     expect(problemas).toEqual([])
   })
 

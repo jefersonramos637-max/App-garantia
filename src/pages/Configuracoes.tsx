@@ -12,6 +12,7 @@ const ABAS: Aba[] = [
   { caminho: 'usuarios', rotulo: 'Usuários', somenteAdmin: true },
   { caminho: 'marcas', rotulo: 'Marcas', somenteAdmin: false },
   { caminho: 'auditoria', rotulo: 'Auditoria', somenteAdmin: true },
+  { caminho: 'atualizacao', rotulo: 'Atualização', somenteAdmin: false },
   { caminho: 'conta', rotulo: 'Minha conta', somenteAdmin: false },
 ]
 
