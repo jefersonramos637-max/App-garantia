@@ -11,13 +11,7 @@ function CaixaEntrada({ titulo, subtitulo, children }: { titulo: string; subtitu
   return (
     <div className="tela-entrada">
       <div className="caixa-entrada">
-        <div className="entrada-marca">
-          <span className="entrada-logo" aria-hidden="true">G</span>
-          <div>
-            <strong>Garantias</strong>
-            <small>Lojão dos Tratores · LL Tratores</small>
-          </div>
-        </div>
+        <img src="/logo.png" alt="Lojão dos Tratores" className="entrada-logo-faixa" width="1280" height="315" />
         <h1>{titulo}</h1>
         {subtitulo && <p className="texto-suave">{subtitulo}</p>}
         {children}

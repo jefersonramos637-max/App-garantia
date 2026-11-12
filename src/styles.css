@@ -2,9 +2,12 @@
    App de Garantias — estilos
    ========================================================================= */
 :root {
-  --verde: #1d5c3a;
-  --verde-escuro: #144129;
-  --verde-claro: #e7f2ec;
+  --verde: #8a6200;
+  --verde-escuro: #5c4200;
+  --verde-claro: #fff3c4;
+  --marca: #f7bb01;
+  --marca-escura: #d9a200;
+  --preto: #0d0d0d;
   --ambar: #b7791f;
   --texto: #1c2321;
   --texto-suave: #5b6663;
@@ -113,7 +116,7 @@ code {
 }
 
 :focus-visible {
-  outline: 3px solid #4b9c6f;
+  outline: 3px solid #f7bb01;
   outline-offset: 2px;
 }
 
@@ -149,7 +152,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--verde);
-  outline: 2px solid rgb(29 92 58 / 25%);
+  outline: 2px solid rgb(247 187 1 / 35%);
   outline-offset: 0;
 }
 [aria-invalid='true'] {
@@ -893,7 +896,7 @@ h1 .selo {
   color: var(--texto);
 }
 a.indicador:hover {
-  border-color: #b9d3c3;
+  border-color: #f0d37a;
   color: var(--texto);
 }
 .indicador span {
@@ -1715,4 +1718,133 @@ a.indicador:hover {
     color: inherit;
     text-decoration: none;
   }
+}
+
+/* =========================================================================
+   TEMA LOJÃO DOS TRATORES — preto, amarelo-âmbar e branco
+   ========================================================================= */
+.botao {
+  background: var(--marca);
+  border-color: var(--marca);
+  color: var(--preto);
+}
+.botao:hover {
+  background: var(--marca-escura);
+  border-color: var(--marca-escura);
+  color: var(--preto);
+}
+.botao-secundario {
+  background: var(--superficie);
+  border-color: var(--borda);
+  color: var(--preto);
+}
+.botao-secundario:hover {
+  background: var(--verde-claro);
+  border-color: var(--marca);
+  color: var(--preto);
+}
+.botao-perigo,
+.botao-perigo:hover {
+  color: #fff;
+}
+.botao-perigo {
+  background: var(--perigo);
+  border-color: var(--perigo);
+}
+.spinner {
+  border-top-color: var(--marca);
+}
+.menu-lateral {
+  background: var(--preto);
+  border-right: 0;
+  color: #e9e9e9;
+}
+.menu-marca strong {
+  color: #fff;
+}
+.menu-marca small,
+.menu-usuario-texto small {
+  color: #a8a8a8;
+}
+.nav-link {
+  color: #d6d6d6;
+}
+.nav-link .icone {
+  color: #8f8f8f;
+}
+.nav-link:hover {
+  background: #1d1d1d;
+  color: #fff;
+}
+.nav-link.ativo {
+  background: var(--marca);
+  color: var(--preto);
+}
+.nav-link.ativo .icone {
+  color: var(--preto);
+}
+.menu-rodape {
+  border-top-color: #2a2a2a;
+}
+.menu-lateral .usuario-nome {
+  color: #fff;
+}
+.menu-lateral .avatar {
+  background: var(--marca);
+  color: var(--preto);
+}
+.menu-lateral .botao-sair {
+  color: #a8a8a8;
+}
+.menu-lateral .botao-sair:hover {
+  color: #ff8a80;
+}
+.menu-lateral .botao-nova {
+  background: var(--marca);
+  color: var(--preto);
+}
+.barra-topo {
+  background: var(--preto);
+  color: #fff;
+  border-bottom: 3px solid var(--marca);
+}
+.barra-topo .botao-icone:hover {
+  background: #222;
+}
+.subnav-item.ativo {
+  border-bottom: 3px solid var(--marca);
+}
+.cor-matriz,
+.barra-empilhada > .cor-matriz,
+.ponto.cor-matriz {
+  background: var(--marca);
+}
+.barra-empilhada > .cor-filial,
+.ponto.cor-filial {
+  background: #3d3d3d;
+}
+.progresso-barra {
+  background: #f9dd7f;
+}
+.aba.ativa {
+  border-bottom-color: var(--marca);
+  color: var(--preto);
+}
+.tela-entrada,
+.tela-cheia {
+  background: var(--preto);
+}
+.caixa-entrada {
+  border: 0;
+  border-top: 5px solid var(--marca);
+}
+.entrada-logo-faixa {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #000;
+}
+.entrada-rodape {
+  color: #a8a8a8;
 }

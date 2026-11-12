@@ -42,13 +42,13 @@ export function Layout() {
         >
           <span aria-hidden="true">☰</span>
         </button>
-        <img src="/icone.svg" alt="" width="26" height="26" />
+        <img src="/icone-192.png" alt="" width="26" height="26" />
         <span className="marca-app">Garantias</span>
       </header>
 
       <aside className="menu-lateral" id="menu-lateral">
         <div className="menu-marca">
-          <img src="/icone.svg" alt="" width="34" height="34" />
+          <img src="/icone-192.png" alt="" width="34" height="34" />
           <div>
             <strong>Garantias</strong>
             <small>Lojão dos Tratores</small>
