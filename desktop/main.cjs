@@ -301,25 +301,8 @@ function configurarAtualizacao() {
 
   atualizador.on('checking-for-update', () => definirEstado({ fase: 'verificando', mensagem: null }))
 
-  atualizador.on('update-available', async (info) => {
-    definirEstado({ fase: 'disponivel', versaoNova: info.version })
-    if (origemVerificacao === 'pagina') return // a tela já mostra o botão "Atualizar agora"
-    if (origemVerificacao === 'auto' && versaoJaOferecida === info.version) return
-    versaoJaOferecida = info.version
-    const { response } = await dialog.showMessageBox(janela, {
-      type: 'info',
-      buttons: ['Atualizar agora', 'Depois'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Atualização disponível',
-      message: `Há uma nova versão do Garantias: ${info.version}`,
-      detail: `Você está na versão ${app.getVersion()}. A atualização leva poucos segundos e o programa reinicia sozinho.`,
-    })
-    if (response === 0) {
-      baixandoPorAviso = true
-      baixarAtualizacao()
-    }
-  })
+  // O aviso "Nova versão disponível" é uma faixa dentro do próprio programa (AvisoAtualizacao).
+  atualizador.on('update-available', (info) => definirEstado({ fase: 'disponivel', versaoNova: info.version }))
 
   atualizador.on('download-progress', (p) => {
     definirEstado({ fase: 'baixando', percentual: Math.round(p.percent) })

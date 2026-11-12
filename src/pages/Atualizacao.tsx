@@ -1,40 +1,7 @@
-import { useEffect, useState } from 'react'
-
-interface EstadoAtualizacao {
-  suportado: boolean
-  fase: 'ocioso' | 'verificando' | 'disponivel' | 'atualizado' | 'baixando' | 'pronto' | 'erro'
-  versaoAtual: string
-  versaoNova: string | null
-  percentual: number
-  mensagem: string | null
-}
-
-interface PonteDesktop {
-  estadoAtualizacao: () => Promise<EstadoAtualizacao | null>
-  verificarAtualizacao: () => Promise<EstadoAtualizacao | null>
-  instalarAtualizacao: () => Promise<EstadoAtualizacao | null>
-  aoMudarAtualizacao: (retorno: (estado: EstadoAtualizacao) => void) => () => void
-}
-
-function ponte(): PonteDesktop | null {
-  return (window as unknown as { garantiasDesktop?: PonteDesktop }).garantiasDesktop ?? null
-}
+import { useAtualizacao } from '../lib/atualizacao'
 
 export function Atualizacao() {
-  const desktop = ponte()
-  const [estado, setEstado] = useState<EstadoAtualizacao | null>(null)
-
-  useEffect(() => {
-    const p = ponte()
-    if (!p) return
-    let ativo = true
-    void p.estadoAtualizacao().then((e) => ativo && setEstado(e))
-    const parar = p.aoMudarAtualizacao((e) => ativo && setEstado(e))
-    return () => {
-      ativo = false
-      parar()
-    }
-  }, [])
+  const { ponte: desktop, estado, verificar, atualizar } = useAtualizacao()
 
   if (!desktop) {
     return (
@@ -85,12 +52,12 @@ export function Atualizacao() {
           type="button"
           className="botao botao-secundario"
           disabled={ocupado || estado?.suportado === false}
-          onClick={() => void desktop.verificarAtualizacao().then(setEstado)}
+          onClick={() => void verificar()}
         >
           Verificar atualização
         </button>
         {fase === 'disponivel' && (
-          <button type="button" className="botao" onClick={() => void desktop.instalarAtualizacao().then(setEstado)}>
+          <button type="button" className="botao" onClick={() => void atualizar()}>
             Atualizar agora
           </button>
         )}

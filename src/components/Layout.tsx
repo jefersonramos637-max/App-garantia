@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { AvisoAtualizacao } from './AvisoAtualizacao'
+import { useAtualizacao } from '../lib/atualizacao'
 import { rotuloPapel } from '../lib/constantes'
 import {
   IconeClientes,
@@ -21,6 +23,8 @@ export function Layout() {
   const { perfil, podeEditar, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
   const local = useLocation()
+  const { estado: atualizacao } = useAtualizacao()
+  const temAtualizacao = atualizacao?.fase === 'disponivel' || atualizacao?.fase === 'baixando'
 
   useEffect(() => {
     setMenuAberto(false)
@@ -85,6 +89,7 @@ export function Layout() {
           <NavLink to="/configuracoes" className={link}>
             <IconeConfiguracoes />
             Configurações
+            {temAtualizacao && <span className="ponto-novo" title="Atualização disponível" />}
           </NavLink>
           <div className="menu-usuario">
             <span className="avatar" aria-hidden="true">
@@ -103,6 +108,7 @@ export function Layout() {
       <div className="fundo-menu" aria-hidden="true" onClick={() => setMenuAberto(false)} />
 
       <main className="conteudo" id="conteudo">
+        <AvisoAtualizacao />
         <Outlet />
       </main>
     </div>
