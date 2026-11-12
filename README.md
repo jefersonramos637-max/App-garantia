@@ -169,7 +169,7 @@ Assim que o `.env.production` é preenchido, o GitHub faz sozinho, em uns 10 min
 4. publica a versão em **Releases** — o link fixo lá em cima passa a baixar essa versão.
 
 Acompanhe em **Actions** (no topo do repositório). A cada melhoria enviada, uma versão nova é publicada e **os programas
-já instalados se atualizam sozinhos** (avisam “Atualização pronta — Reiniciar agora”).
+já instalados se atualizam sozinhos** (avisam “Atualização disponível — Atualizar agora” e reiniciam já na versão nova).
 
 ### Parte C — Instalar nos computadores
 

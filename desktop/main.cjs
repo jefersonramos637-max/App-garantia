@@ -269,6 +269,9 @@ function criarMenu() {
 let atualizador = null
 let avisarSemAtualizacao = false
 
+let versaoJaOferecida = null
+let baixando = false
+
 function configurarAtualizacao() {
   if (!app.isPackaged || process.platform !== 'win32') return
   try {
@@ -276,41 +279,76 @@ function configurarAtualizacao() {
   } catch {
     return
   }
-  atualizador.autoDownload = true
+  // Nada é baixado sem o usuário concordar.
+  atualizador.autoDownload = false
   atualizador.autoInstallOnAppQuit = true
 
-  atualizador.on('update-downloaded', async (info) => {
+  atualizador.on('update-available', async (info) => {
+    // Avisos automáticos: uma vez por versão; na busca manual, sempre.
+    if (!avisarSemAtualizacao && versaoJaOferecida === info.version) return
+    versaoJaOferecida = info.version
+    avisarSemAtualizacao = false
     const { response } = await dialog.showMessageBox(janela, {
       type: 'info',
-      buttons: ['Reiniciar agora', 'Depois'],
+      buttons: ['Atualizar agora', 'Depois'],
       defaultId: 0,
       cancelId: 1,
-      title: 'Atualização pronta',
-      message: `A versão ${info.version} do Garantias foi baixada.`,
-      detail: 'Clique em "Reiniciar agora" para usar a nova versão. Se preferir, ela será instalada quando você fechar o programa.',
+      title: 'Atualização disponível',
+      message: `Há uma nova versão do Garantias: ${info.version}`,
+      detail: `Você está na versão ${app.getVersion()}. A atualização leva poucos segundos e o programa reinicia sozinho.`,
     })
-    if (response === 0) atualizador.quitAndInstall()
+    if (response === 0) {
+      baixando = true
+      if (janela) janela.setTitle('Garantias — baixando atualização…')
+      atualizador.downloadUpdate().catch(() => {
+        /* tratado no evento "error" */
+      })
+    }
   })
+
+  atualizador.on('download-progress', (p) => {
+    if (janela && !janela.isDestroyed()) {
+      janela.setProgressBar(p.percent / 100)
+      janela.setTitle(`Garantias — baixando atualização ${Math.round(p.percent)}%`)
+    }
+  })
+
+  atualizador.on('update-downloaded', () => {
+    baixando = false
+    if (janela && !janela.isDestroyed()) {
+      janela.setProgressBar(-1)
+      janela.setTitle('Garantias')
+    }
+    // Instala e reabre o programa já atualizado.
+    setImmediate(() => atualizador.quitAndInstall(false, true))
+  })
+
   atualizador.on('update-not-available', () => {
     if (avisarSemAtualizacao) {
       avisarSemAtualizacao = false
       void dialog.showMessageBox(janela, { type: 'info', title: 'Atualização', message: 'Você já está usando a versão mais recente.' })
     }
   })
+
   atualizador.on('error', (erro) => {
     console.warn('Atualização automática:', erro && erro.message)
-    if (avisarSemAtualizacao) {
+    if (janela && !janela.isDestroyed()) {
+      janela.setProgressBar(-1)
+      janela.setTitle('Garantias')
+    }
+    if (avisarSemAtualizacao || baixando) {
       avisarSemAtualizacao = false
+      baixando = false
       void dialog.showMessageBox(janela, {
         type: 'warning',
         title: 'Atualização',
-        message: 'Não foi possível procurar atualizações agora. Verifique a internet e tente mais tarde.',
+        message: 'Não foi possível atualizar agora. Verifique a internet e tente mais tarde (Aplicativo → Procurar atualização).',
       })
     }
   })
 
   verificarAtualizacao(false)
-  setInterval(() => verificarAtualizacao(false), 4 * 60 * 60 * 1000)
+  setInterval(() => verificarAtualizacao(false), 60 * 60 * 1000)
 }
 
 function verificarAtualizacao(manual) {
