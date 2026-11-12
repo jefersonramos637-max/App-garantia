@@ -109,9 +109,13 @@ ser criado na **sua** conta do Supabase (gratuito). Tempo estimado: 15 minutos.
 **A2. Criar as tabelas e as regras de segurança**
 
 1. No menu lateral, abra **SQL Editor** → **New query**.
-2. Abra o arquivo [`supabase/migrations/20261111000000_esquema_inicial.sql`](supabase/migrations/20261111000000_esquema_inicial.sql),
-   clique no botão **Copy raw file** (ícone de copiar), cole no editor do Supabase e clique em **Run**.
-   Deve aparecer *“Success. No rows returned”*. **Rode apenas uma vez.**
+2. Abra o link **direto** do arquivo (sem tradução):
+   https://raw.githubusercontent.com/jefersonramos637-max/App-garantia/claude/warranty-registry-app-51jbw6/supabase/migrations/20261111000000_esquema_inicial.sql
+   Selecione tudo (**Ctrl+A**), copie (**Ctrl+C**), cole no editor do Supabase e clique em **Run**.
+   Deve aparecer *“Success. No rows returned”*.
+   - **Pode rodar de novo sem problema** se algo falhar: o script é seguro para reexecutar e não apaga dados.
+   - ⚠️ No Chrome, **desative a tradução** deste site antes de copiar (ícone de tradução na barra de endereço →
+     *Nunca traduzir supabase.com*). A tradução altera o texto do SQL e pode quebrar a execução.
 
 **A3. Fechar o cadastro público (muito importante para a segurança)**
 
