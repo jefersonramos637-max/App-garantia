@@ -42,6 +42,11 @@ try {
 const ORIGEM = ENDERECO ? ENDERECO.origin : null
 let janela = null
 
+// Nos testes automáticos os links externos são apenas registrados (não abre o navegador).
+const MODO_TESTE = !app.isPackaged && Boolean(process.env.GARANTIAS_URL_TESTE)
+const linksExternosNoTeste = []
+if (MODO_TESTE) globalThis.__linksExternosNoTeste = linksExternosNoTeste
+
 function doSistema(url) {
   try {
     return new URL(url).origin === ORIGEM
@@ -54,7 +59,9 @@ function doSistema(url) {
 function abrirNoNavegador(url) {
   try {
     const u = new URL(url)
-    if (u.protocol === 'https:' || u.protocol === 'mailto:') void shell.openExternal(u.href)
+    if (u.protocol !== 'https:' && u.protocol !== 'mailto:') return
+    if (MODO_TESTE) linksExternosNoTeste.push(u.href)
+    else void shell.openExternal(u.href)
   } catch {
     /* endereço inválido: ignora */
   }
