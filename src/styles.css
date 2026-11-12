@@ -1848,3 +1848,122 @@ a.indicador:hover {
 .entrada-rodape {
   color: #a8a8a8;
 }
+
+/* =========================================================================
+   MINIMALISTA — menos caixas, bordas finas, mais espaço
+   ========================================================================= */
+:root {
+  --borda: #e7e7e4;
+  --raio: 8px;
+}
+.entrada-logo-faixa {
+  width: min(300px, 80vw);
+  height: auto;
+  margin: 0 0 1.5rem;
+  border-radius: 0;
+  background: transparent;
+}
+.caixa-entrada {
+  border-top: 0;
+  box-shadow: none;
+  border-radius: 12px;
+  padding: 1.5rem 1.5rem 1.25rem;
+  max-width: 380px;
+  gap: 0.9rem;
+}
+.caixa-entrada h1 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='tel'],
+input[type='date'],
+input:not([type]),
+select,
+textarea {
+  min-height: 40px;
+  border-color: var(--borda);
+  background: #fafaf8;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  background: #fff;
+  border-color: var(--marca);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(247 187 1 / 22%);
+}
+.campo > label,
+.grupo-interno > legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.formulario {
+  gap: 1.1rem;
+}
+/* Grupos do formulário: sem caixa, só título discreto e linha fina */
+.grupo {
+  border: 0;
+  border-top: 1px solid var(--borda);
+  border-radius: 0;
+  background: transparent;
+  padding: 1.1rem 0 0;
+}
+.grupo > legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.grupo > legend + * {
+  clear: both;
+}
+.opcao-cartao,
+.opcao-pilula {
+  border-width: 1px;
+  background: #fafaf8;
+}
+.opcao-cartao.selecionada,
+.opcao-pilula.selecionada {
+  border-color: var(--marca);
+  background: #fff9e0;
+  box-shadow: 0 0 0 1px var(--marca);
+}
+.painel-bloco,
+.cartao,
+.indicador,
+.tabela-container,
+.filtros {
+  box-shadow: none;
+}
+.filtros {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.botao {
+  min-height: 40px;
+  border-radius: 8px;
+  font-weight: 650;
+}
+.acoes-fixas {
+  background: linear-gradient(to top, var(--fundo) 70%, transparent);
+}
+.pagina-cabecalho h1 {
+  font-size: 1.35rem;
+}
+.modal {
+  box-shadow: 0 12px 40px rgb(0 0 0 / 18%);
+}
+.tela-entrada {
+  background: #000;
+}

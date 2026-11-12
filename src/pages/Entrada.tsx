@@ -10,8 +10,8 @@ import { Carregando } from '../components/Comuns'
 function CaixaEntrada({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children: ReactNode }) {
   return (
     <div className="tela-entrada">
+      <img src="/logo.png" alt="Lojão dos Tratores" className="entrada-logo-faixa" width="1280" height="315" />
       <div className="caixa-entrada">
-        <img src="/logo.png" alt="Lojão dos Tratores" className="entrada-logo-faixa" width="1280" height="315" />
         <h1>{titulo}</h1>
         {subtitulo && <p className="texto-suave">{subtitulo}</p>}
         {children}
