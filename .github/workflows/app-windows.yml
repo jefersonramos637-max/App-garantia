@@ -1,0 +1,82 @@
+# Gera o instalador do aplicativo para Windows (.exe) num computador Windows do GitHub.
+#
+# Como usar:
+#   1) Settings > Secrets and variables > Actions > aba "Variables" > New repository variable
+#      Nome: URL_DO_APLICATIVO   Valor: o endereço do site (ex.: https://garantias.pages.dev)
+#   2) Actions > "App para Windows (.exe)" > Run workflow
+#   3) Baixe o instalador em "Releases" (ou em "Artifacts" da execução).
+name: App para Windows (.exe)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/app-windows.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      URL_DO_APLICATIVO: ${{ vars.URL_DO_APLICATIVO }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Instalar dependências
+        run: |
+          npm ci
+          node node_modules/electron/install.js
+
+      - name: Definir endereço do sistema
+        run: |
+          if [ -z "$URL_DO_APLICATIVO" ]; then
+            echo "::warning::A variável URL_DO_APLICATIVO não foi cadastrada. Será gerado apenas um instalador de TESTE (não use na empresa)."
+            echo "URL_DO_APLICATIVO=https://exemplo.invalid" >> "$GITHUB_ENV"
+            echo "INSTALADOR_TESTE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Gerar instalador
+        run: npm run pacote:windows
+
+      - name: Conferir instalador
+        run: |
+          ls -la saida/*.exe
+          tamanho=$(stat -c %s saida/*.exe)
+          test "$tamanho" -gt 30000000
+
+      - name: Guardar instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.INSTALADOR_TESTE == '1' && 'Instalador-TESTE-nao-usar' || 'Garantias-Instalador-Windows' }}
+          path: desktop/saida/*.exe
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publicar em Releases
+        if: env.INSTALADOR_TESTE != '1' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versao=$(node -p "require('./package.json').version")
+          tag="windows-v${versao}-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" saida/*.exe \
+            --title "Garantias para Windows ${versao} (versão ${GITHUB_RUN_NUMBER})" \
+            --notes "Instalador do aplicativo de garantias para Windows. Abre o sistema em: ${URL_DO_APLICATIVO}" \
+            --target "$GITHUB_SHA"

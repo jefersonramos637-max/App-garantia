@@ -1,8 +1,9 @@
 # App de Garantias — Lojão dos Tratores / LL Tratores
 
-Aplicativo web para **registrar e acompanhar garantias** do setor de compras, com acesso restrito por login e senha.
-Funciona no computador e no celular, fica no ar 24 horas e todos os dados são gravados automaticamente em um banco
-de dados na nuvem (Supabase / PostgreSQL). O que uma pessoa registra aparece **na hora** para todas as outras.
+Aplicativo para **registrar e acompanhar garantias** do setor de compras, com acesso restrito por login e senha.
+Funciona como **programa instalado no Windows (.exe)**, no navegador do computador e no celular. Fica no ar 24 horas e
+todos os dados são gravados automaticamente em um banco de dados na nuvem (Supabase / PostgreSQL). O que uma pessoa
+registra aparece **na hora** para todas as outras.
 
 ---
 
@@ -10,7 +11,7 @@ de dados na nuvem (Supabase / PostgreSQL). O que uma pessoa registra aparece **n
 
 1. [O que o aplicativo faz](#1-o-que-o-aplicativo-faz)
 2. [Segurança](#2-segurança)
-3. [Como colocar no ar (passo a passo)](#3-como-colocar-no-ar-passo-a-passo)
+3. [Como colocar no ar (passo a passo)](#3-como-colocar-no-ar-passo-a-passo) — inclui o instalador para Windows (.exe)
 4. [Dar acesso a outras pessoas](#4-dar-acesso-a-outras-pessoas)
 5. [Importar as listas de produtos e de clientes](#5-importar-as-listas-de-produtos-e-de-clientes)
 6. [Backup automático e "manter ativo"](#6-backup-automático-e-manter-ativo)
@@ -45,17 +46,24 @@ de dados na nuvem (Supabase / PostgreSQL). O que uma pessoa registra aparece **n
 - Data de conclusão automática; alerta para garantias **abertas há mais de 30 dias**;
 - **Impressão** da garantia.
 
-**Outras telas**
+**Menu principal** (enxuto): Painel, Garantias, Clientes e Produtos — e o botão **+ Nova garantia**.
 
-- **Painel** com totais por status, por empresa (Lojão × LL) e por origem (Nacional × Importado), valor em andamento e
-  últimas movimentações — atualiza sozinho.
-- **Lista de garantias** com busca (nº, cliente, código, peça, marca, NF, fornecedor), filtros (situação, empresa,
-  origem, período) e **exportação para Excel**.
-- **Cadastros** de clientes, produtos (com várias marcas) e marcas.
-- **Importação** das listas em Excel (.xlsx) ou CSV, com prévia e conferência antes de gravar.
+- **Painel**: em andamento, abertas há mais de 30 dias, concluídas e valor em andamento; situação das garantias;
+  comparação Lojão × LL e Nacional × Importado; últimas movimentações — atualiza sozinho.
+- **Garantias**: busca (nº, cliente, código, peça, marca, NF, fornecedor), filtros (situação, empresa, origem,
+  período) e **exportação para Excel**.
+- **Clientes** e **Produtos** (cada produto com suas várias marcas).
+
+**Configurações** (no rodapé do menu):
+
+- **Importar planilhas** (administrador): listas de produtos e de clientes em Excel (.xlsx) ou CSV, com prévia e
+  conferência antes de gravar.
 - **Usuários** (administrador): liberar/bloquear acesso, definir papel, redefinir senha, remover verificação em 2 etapas.
+- **Marcas**: corrigir nomes e ativar/desativar marcas.
 - **Auditoria** (administrador): registro permanente de todas as inclusões, alterações e exclusões.
 - **Minha conta**: trocar senha, ativar verificação em duas etapas, sair de todos os aparelhos.
+
+Operadores e usuários de consulta veem em Configurações apenas **Marcas** e **Minha conta**.
 
 > **“Replicar as informações para os terceiros”:** o aplicativo usa um banco de dados central — tudo que você registra
 > fica disponível **imediatamente** para todas as pessoas que você liberar, em qualquer aparelho (as telas se atualizam
@@ -166,7 +174,29 @@ No Supabase: **Authentication → URL Configuration** → **Site URL** = o ender
 ### Passo 7 — Primeiro acesso
 
 Abra o endereço do site, entre com seu e-mail e a senha provisória. O aplicativo vai pedir para você criar uma senha
-nova. Pronto! Recomendo ativar a **verificação em duas etapas** em **Minha conta**.
+nova. Pronto! Recomendo ativar a **verificação em duas etapas** em **Configurações → Minha conta**.
+
+### Passo 8 — Instalador para Windows (.exe)
+
+O programa para Windows abre o sistema publicado no passo 5 numa janela própria, com ícone na área de trabalho e no
+menu Iniciar. **Quando o sistema é atualizado, todos os computadores recebem a atualização sozinhos** — não precisa
+reinstalar. (No celular, continue usando o navegador.)
+
+1. No GitHub: **Settings → Secrets and variables → Actions → aba Variables → New repository variable**.
+   Nome: `URL_DO_APLICATIVO`. Valor: o endereço do passo 5 (ex.: `https://garantias.pages.dev`).
+2. Em **Actions → App para Windows (.exe) → Run workflow → Run workflow**. Leva uns 5 minutos.
+3. Na página inicial do repositório, abra **Releases** e baixe `Garantias-Instalador-1.0.0.exe`.
+4. Copie o instalador para os computadores (pendrive, rede ou e-mail) e dê dois cliques. Não precisa ser administrador
+   do Windows. Será criado o atalho **Garantias** na área de trabalho.
+
+> **Aviso do Windows na primeira instalação:** como o instalador não tem “assinatura digital” (um certificado pago, de
+> cerca de R$ 1.000 a R$ 2.500 por ano), o Windows pode mostrar *“O Windows protegeu o computador”*. Clique em
+> **Mais informações → Executar assim mesmo**. Isso é normal para programas próprios da empresa. Se quiser eliminar o
+> aviso, dá para adicionar a assinatura depois.
+
+Segurança do programa: só abre o endereço da empresa (qualquer outro site é bloqueado ou vai para o navegador), não dá
+ao site acesso aos arquivos do computador e não aceita “truques” para executar outros programas. Para receber as
+correções de segurança do Windows/Chromium, gere e reinstale o programa a cada 3–6 meses (passos 2 a 4).
 
 > **Alternativa ao Cloudflare:** o projeto também funciona no **Netlify** (o arquivo `netlify.toml` já está pronto;
 > cadastre as mesmas variáveis). Evite o plano gratuito da Vercel: ele não permite uso comercial.
@@ -175,17 +205,17 @@ nova. Pronto! Recomendo ativar a **verificação em duas etapas** em **Minha con
 
 1. No Supabase: **Authentication → Users → Add user → Create new user** (e-mail + senha provisória +
    **Auto Confirm User**).
-2. No aplicativo: **Usuários → Atualizar lista**. A pessoa aparece como “Aguardando liberação”.
+2. No aplicativo: **Configurações → Usuários → Atualizar lista**. A pessoa aparece como “Aguardando liberação”.
 3. Clique em **Editar**, escolha o papel e marque **Acesso liberado**.
 4. Envie à pessoa o endereço do site, o e-mail e a senha provisória (ela troca no primeiro acesso).
 
-- **Esqueceu a senha?** Em **Usuários → Redefinir senha** o sistema gera uma senha provisória.
-- **Perdeu o celular da verificação em 2 etapas?** **Usuários → Remover 2 etapas**.
+- **Esqueceu a senha?** Em **Configurações → Usuários → Redefinir senha** o sistema gera uma senha provisória.
+- **Perdeu o celular da verificação em 2 etapas?** **Configurações → Usuários → Remover 2 etapas**.
 - **Tirar o acesso:** **Editar** → desmarque **Acesso liberado** (a pessoa é desconectada na hora).
 
 ## 5. Importar as listas de produtos e de clientes
 
-Menu **Importar listas** (somente administrador). Aceita **Excel (.xlsx)** e **CSV**. Há um botão
+**Configurações → Importar planilhas** (somente administrador). Aceita **Excel (.xlsx)** e **CSV**. Há um botão
 **Baixar planilha-modelo**. O sistema reconhece as colunas automaticamente, mostra uma **prévia com os erros e avisos
 linha a linha** e só grava quando você confirmar. Importar a mesma lista de novo **não duplica**: atualiza o que já existe.
 
@@ -244,14 +274,16 @@ Supabase, sem pausa por inatividade e suporte. O aplicativo não precisa de nenh
 |---|---|
 | Tela “Configuração incompleta” | Confira as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no Cloudflare e faça novo deploy. |
 | “Email logins are disabled” | Em Authentication, o provedor **Email** foi desligado. Ligue-o de novo (desligue apenas *Allow new users to sign up*). |
-| Usuário entra e vê “Acesso aguardando liberação” | Libere em **Usuários → Editar → Acesso liberado**. |
+| Usuário entra e vê “Acesso aguardando liberação” | Libere em **Configurações → Usuários → Editar → Acesso liberado**. |
+| Programa do Windows mostra “Sem conexão com o sistema” | Verifique a internet. Se o site também não abre no navegador, veja a linha abaixo. O programa tenta reconectar sozinho. |
+| Windows diz “O Windows protegeu o computador” ao instalar | Normal sem assinatura digital: **Mais informações → Executar assim mesmo** (veja o passo 8). |
 | Ninguém consegue entrar e o site mostra erro de conexão | O projeto gratuito pode ter pausado: no painel do Supabase clique em **Restore project** e configure o “manter ativo” (seção 6). |
 | Garantia registrada por engano | Mude o status para **Cancelada** (garantias não são apagadas, por segurança). |
 
 ## 9. Para técnicos: desenvolvimento e testes
 
-Tecnologias: React 19 + TypeScript + Vite (front-end estático) e Supabase (PostgreSQL com RLS, Auth com TOTP,
-Storage, Realtime).
+Tecnologias: React 19 + TypeScript + Vite (front-end estático), Supabase (PostgreSQL com RLS, Auth com TOTP,
+Storage, Realtime) e Electron (programa para Windows).
 
 ```bash
 npm install
@@ -263,6 +295,12 @@ npm run lint && npm run typecheck
 npm test                    # testes de unidade (Vitest)
 npm run db:test             # testes de segurança do banco (pgTAP)
 npm run test:e2e            # testes no navegador (Playwright) — recria o banco local
+
+# Programa para computador (Electron)
+cd desktop && npm ci
+URL_DO_APLICATIVO=http://127.0.0.1:5173 npm run iniciar   # abre o programa apontando para o ambiente local
+# Testes do programa: na raiz, "xvfb-run -a npm run test:e2e" (Linux) roda também tests/e2e/desktop.spec.ts
+# O instalador .exe é gerado pelo GitHub Actions (.github/workflows/app-windows.yml) num Windows.
 ```
 
 Estrutura:
@@ -274,5 +312,6 @@ src/lib/               cliente Supabase, formatação, importação de planilhas
 src/pages/             telas
 tests/e2e/             testes de ponta a ponta (rodam com os mesmos cabeçalhos de segurança da hospedagem)
 public/_headers        cabeçalhos de segurança (CSP, HSTS…) usados pelo Cloudflare Pages / Netlify
-.github/workflows/     verificação automática, backup diário e “manter ativo”
+desktop/               programa para Windows (Electron): janela segura que abre o sistema publicado
+.github/workflows/     verificação automática, instalador Windows, backup diário e “manter ativo”
 ```

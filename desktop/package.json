@@ -1,0 +1,72 @@
+{
+  "name": "garantias-desktop",
+  "productName": "Garantias",
+  "version": "1.0.0",
+  "description": "Garantias - Lojão dos Tratores / LL Tratores",
+  "author": "Lojão dos Tratores",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "configurar": "node scripts/configurar.cjs",
+    "iniciar": "npm run configurar && electron .",
+    "pacote:windows": "npm run configurar && electron-builder --win nsis --x64 --publish never",
+    "pacote:linux-teste": "npm run configurar && electron-builder --linux dir --publish never"
+  },
+  "build": {
+    "appId": "br.com.lojaodostratores.garantias",
+    "productName": "Garantias",
+    "copyright": "Lojão dos Tratores",
+    "directories": {
+      "output": "saida"
+    },
+    "files": [
+      "main.cjs",
+      "sem-conexao.html",
+      "endereco.json",
+      "icone.png",
+      "package.json"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icone.png",
+      "artifactName": "Garantias-Instalador-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Garantias",
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046",
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": "dir",
+      "icon": "icone.png",
+      "category": "Office"
+    }
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.1"
+  }
+}

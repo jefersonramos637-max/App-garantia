@@ -47,10 +47,13 @@ jobs:
         run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Testes de segurança do banco (pgTAP)
         run: npx supabase test db
-      - name: Instalar navegador
-        run: npx playwright install --with-deps chromium
-      - name: Testes de ponta a ponta
-        run: npx playwright test --trace off
+      - name: Instalar navegador e app de computador
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y xvfb
+          cd desktop && npm ci && node node_modules/electron/install.js
+      - name: Testes de ponta a ponta (navegador e app de computador)
+        run: xvfb-run -a npx playwright test --trace off
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
