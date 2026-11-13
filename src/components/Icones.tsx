@@ -84,3 +84,10 @@ export const IconeNotas = () => (
     <path d="M8 9h7M8 13h7" />
   </Icone>
 )
+
+export const IconeMenuLateral = () => (
+  <Icone>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M9 4v16" />
+  </Icone>
+)

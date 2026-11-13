@@ -9,11 +9,22 @@ import {
   IconeCompras,
   IconeConfiguracoes,
   IconeGarantias,
+  IconeMenuLateral,
   IconeNotas,
   IconePainel,
   IconeProdutos,
   IconeSair,
 } from './Icones'
+
+const CHAVE_MENU = 'garantias:menu-recolhido'
+
+function lerRecolhido(): boolean {
+  try {
+    return localStorage.getItem(CHAVE_MENU) === '1'
+  } catch {
+    return false
+  }
+}
 
 function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/).filter(Boolean)
@@ -24,12 +35,35 @@ function iniciais(nome: string): string {
 export function Layout() {
   const { perfil, podeEditar, ehAdmin, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
+  // Menu lateral recolhido (computador): lembra a escolha neste aparelho.
+  const [recolhido, setRecolhido] = useState(lerRecolhido)
+  function alternarRecolhido() {
+    setRecolhido((v) => {
+      try {
+        localStorage.setItem(CHAVE_MENU, v ? '0' : '1')
+      } catch {
+        /* sem armazenamento: vale só nesta sessão */
+      }
+      return !v
+    })
+  }
   const local = useLocation()
   // Cada seção (garantias, compras, configurações…) entra com animação; abas internas animam por conta própria.
   const partes = local.pathname.split('/')
   const chaveTela = partes[1] === 'compras' || partes[1] === 'configuracoes' ? `/${partes[1]}` : local.pathname
   const { estado: atualizacao } = useAtualizacao()
   const temAtualizacao = atualizacao?.fase === 'disponivel' || atualizacao?.fase === 'baixando'
+
+  useEffect(() => {
+    function atalho(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        alternarRecolhido()
+      }
+    }
+    window.addEventListener('keydown', atalho)
+    return () => window.removeEventListener('keydown', atalho)
+  }, [])
 
   useEffect(() => {
     setMenuAberto(false)
@@ -39,7 +73,7 @@ export function Layout() {
   const nome = perfil?.nome || perfil?.email || ''
 
   return (
-    <div className={menuAberto ? 'layout menu-aberto' : 'layout'}>
+    <div className={`layout${menuAberto ? ' menu-aberto' : ''}${recolhido ? ' menu-recolhido' : ''}`}>
       <header className="barra-topo">
         <button
           type="button"
@@ -55,7 +89,17 @@ export function Layout() {
         <span className="marca-app">Garantias</span>
       </header>
 
-      <aside className="menu-lateral" id="menu-lateral">
+      <button
+        type="button"
+        className="botao-icone botao-mostrar-menu"
+        aria-label="Mostrar menu lateral"
+        title="Mostrar menu (Ctrl+B)"
+        onClick={alternarRecolhido}
+      >
+        <IconeMenuLateral />
+      </button>
+
+      <aside className="menu-lateral" id="menu-lateral" inert={recolhido && !menuAberto ? true : undefined}>
         <div className="menu-marca">
           <img src="/icone-192.png" alt="" width="34" height="34" />
           <div>
@@ -63,6 +107,15 @@ export function Layout() {
             <small>Lojão dos Tratores</small>
             <small>LL Tratores</small>
           </div>
+          <button
+            type="button"
+            className="botao-icone botao-ocultar-menu"
+            aria-label="Ocultar menu lateral"
+            title="Ocultar menu (Ctrl+B)"
+            onClick={alternarRecolhido}
+          >
+            <IconeMenuLateral />
+          </button>
         </div>
 
         {podeEditar && (

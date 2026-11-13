@@ -2357,3 +2357,55 @@ textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Menu lateral recolhível (computador) ---------- */
+.botao-ocultar-menu {
+  margin-left: auto;
+  color: #a8a8a8;
+}
+.botao-ocultar-menu:hover {
+  background: #222;
+  color: #fff;
+}
+.botao-mostrar-menu {
+  display: none;
+}
+@media (min-width: 901px) {
+  .layout {
+    transition: grid-template-columns 0.25s ease;
+  }
+  .menu-lateral {
+    transition: transform 0.25s ease, visibility 0.25s;
+  }
+  .layout.menu-recolhido {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+  .layout.menu-recolhido .menu-lateral {
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+  .layout.menu-recolhido .botao-mostrar-menu {
+    display: inline-flex;
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 30;
+    background: var(--preto);
+    color: var(--marca);
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0.45rem;
+    animation: surgir 0.25s ease;
+  }
+  .layout.menu-recolhido .botao-mostrar-menu:hover {
+    background: #222;
+  }
+  .layout.menu-recolhido .conteudo {
+    padding-left: 3.5rem;
+  }
+}
+@media (max-width: 900px) {
+  .botao-ocultar-menu {
+    display: none;
+  }
+}
